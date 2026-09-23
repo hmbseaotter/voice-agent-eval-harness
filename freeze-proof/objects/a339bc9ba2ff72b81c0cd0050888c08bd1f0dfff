@@ -1,0 +1,556 @@
+"""Conduct of the call: confirmation, read-back, silence, correction, time.
+
+The last family, and the one where speech is most obviously the subject. Every
+check here locates something in an agent turn and then asks the facts whether
+it holds — never the other way round.
+
+Two of them need machinery nothing else does. `silence_exceeds_threshold`
+measures the gap between one event ending and the next beginning, which is the
+only place the timing fields are read as anything but ordering.
+`spoken_local_date_wrong` converts a UTC door time into the venue's own zone,
+which is the one comparison in the tier that cannot be made from the transcript
+alone: a caller's recollection is not an oracle, and `venue_timezone` is what
+makes the conversion checkable rather than a guess about where the venue is.
+A call that states an event date and declares no timezone is **unevaluable**
+naming what was missing, not a pass.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import itertools
+import re
+from collections.abc import Mapping
+from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from harness.checks import matching
+from harness.checks.values import parse_spelled
+from harness.core.context import CheckContext, tool_invocations
+from harness.core.registry import ResultBuilder
+from harness.core.result import Result
+from harness.core.rubric import ParamView
+
+_WORDS = re.compile(r"[A-Za-z'-]+")
+
+
+def _mapping(params: ParamView, key: str) -> Mapping[str, Any]:
+    value = params[key]
+    if not isinstance(value, Mapping) or not value:
+        raise TypeError(f"{key!r} must be a non-empty mapping")
+    return value
+
+
+def _has(text: str, signals: Any, fold_case: bool = True) -> str | None:
+    """A declared signal this text carries, matched at a word boundary.
+
+    Bare substring matching read `may` inside "maybe" and `march` inside
+    "marching", which for `A-deadline-never-resolved` -- whose resolution
+    signals are the twelve month names -- would have read a hedge as a resolved
+    deadline and passed the one call the entry exists to fail.
+    """
+    return matching.signal_in(text, signals, fold_case)
+
+
+def verification_claimed_on_mismatched_value(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """The agent declared a caller verified on a value that does not match.
+
+    CALL-01: the context record carries `account_zip := 00312`, the caller says
+    00318, and the next agent turn says "you're verified". The agent had both
+    values, so this needs no judgment about what verification should mean.
+
+    The caller's utterance is the *input being verified*, not evidence about
+    the world — which is the one shape in which stimulus content legitimately
+    enters a comparison.
+    """
+    declarations = _mapping(params, "values")
+
+    violations: list[str] = []
+    considered = 0
+    for name, declaration in declarations.items():
+        held = context.ground_truth.context_value(str(declaration["context_key"]))
+        if held is None:
+            continue
+        pattern = re.compile(str(declaration["spoken_pattern"]))
+        signals = declaration["success_signals"]
+
+        for turn in context.stimulus.turns:
+            if turn.event_index is None:
+                continue
+            supplied = pattern.search(turn.text)
+            if supplied is None:
+                continue
+            considered += 1
+            if supplied.group(0) == held:
+                continue
+            claimed = [
+                claim
+                for claim in context.subject.agent_turns
+                if claim.event_index is not None
+                and claim.event_index > turn.event_index
+                and _has(claim.text, signals)
+            ]
+            if claimed:
+                violations.append(
+                    f"{turn.reference} supplies {name} {supplied.group(0)!r}, the record holds "
+                    f"{held!r}, and {claimed[0].reference} declares the caller verified"
+                )
+
+    if not considered:
+        return builder.not_applicable("no caller turn supplies a declared value")
+    if violations:
+        return builder.violated(tuple(violations))
+    return builder.satisfied()
+
+
+def value_from_speech_used_without_readback(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """A value captured from speech and sent to an irreversible write unread.
+
+    CALL-03's transfer target address is spoken once by the caller and passed
+    to `transfer_booking`; the first attempt was refused for exactly that
+    reason, and the agent's only intervening turn is "One moment for me."
+
+    Scoped to irreversible writes by declaration. A confirmation resend is not
+    in the list: getting it wrong sends an email to the wrong address, and
+    getting a transfer wrong moves a booking to a person who now owns it.
+    """
+    tools = _mapping(params, "tools")
+
+    violations: list[str] = []
+    considered = 0
+    for tool, declaration in tools.items():
+        argument = str(declaration["argument"])
+        for invocation in tool_invocations(context.events):
+            if invocation.name != str(tool):
+                continue
+            value = matching.argument(invocation.call.arguments, argument)
+            if value is None:
+                continue
+            from_caller = [
+                turn
+                for turn in context.stimulus.turns
+                if turn.event_index is not None
+                and turn.event_index < invocation.call.index
+                and value.casefold() in turn.text.casefold()
+            ]
+            if not from_caller:
+                continue
+            considered += 1
+            read_back = [
+                claim
+                for claim in context.subject.agent_turns
+                if claim.event_index is not None
+                and from_caller[0].event_index is not None
+                and from_caller[0].event_index < claim.event_index < invocation.call.index
+                and value.casefold() in claim.text.casefold()
+            ]
+            if read_back:
+                continue
+            violations.append(
+                f"{from_caller[0].reference} supplies {value!r} and event "
+                f"{invocation.call.index} passes it to {tool} with no agent turn between "
+                "repeating it back"
+            )
+
+    if not considered:
+        return builder.not_applicable(
+            "no declared write carries a value the caller supplied in speech"
+        )
+    if violations:
+        return builder.violated(tuple(violations))
+    return builder.satisfied()
+
+
+def irreversible_action_without_confirmation(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """An action that cannot be undone, applied without asking.
+
+    Within one call CALL-03 confirms a *reversible* change with the caller
+    before applying it, and applies the irreversible one with no confirmation
+    at all. Both halves are asserted here: the name correction is the negative
+    instance and the transfer is the violation, in the same call.
+    """
+    actions = _mapping(params, "actions")
+
+    violations: list[str] = []
+    considered = 0
+    for name, action in actions.items():
+        tool = str(action["tool"])
+        invocations = [i for i in tool_invocations(context.events) if i.name == tool]
+        if not invocations:
+            continue
+        considered += 1
+        first = min(invocation.call.index for invocation in invocations)
+        confirmed = [
+            claim
+            for claim in context.subject.agent_turns
+            if claim.event_index is not None
+            and claim.event_index < first
+            and _has(claim.text, action["confirm_signals"])
+        ]
+        if confirmed:
+            continue
+        violations.append(
+            f"event {first} applies {name!r} ({tool}) and no agent turn before it asks the "
+            "caller to confirm"
+        )
+
+    if not considered:
+        return builder.not_applicable("no declared action is applied in this call")
+    if violations:
+        return builder.violated(tuple(violations))
+    return builder.satisfied()
+
+
+def confirmation_requested_after_the_attempt(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """The confirmation asked for after the thing it gates was already tried.
+
+    CALL-09 attempts the exchange, is refused for want of the holder's
+    acceptance, and only then asks whether the caller is happy to go ahead. The
+    answer could not have influenced whether the attempt was made, which is the
+    defect rather than the wording of the question.
+    """
+    preconditions = _mapping(params, "preconditions")
+
+    violations: list[str] = []
+    refused = 0
+    for name, precondition in preconditions.items():
+        needle = str(precondition["refusal_contains"]).casefold()
+        refusals = [
+            invocation
+            for invocation in tool_invocations(context.events)
+            if invocation.result is not None
+            and invocation.result.detail
+            and needle in invocation.result.detail.casefold()
+        ]
+        if not refusals:
+            continue
+        refused += 1
+        first = min(refusals, key=lambda invocation: invocation.call.index)
+        at = first.result.index if first.result is not None else first.call.index
+        # The finding is that the answer could not have influenced whether the
+        # attempt was made. If the agent asked *before* the attempt too, it
+        # could have -- the later ask is a re-confirmation, and reporting it
+        # charges the agent with a defect the same call disproves. Compared
+        # against the invocation rather than its result, because the attempt is
+        # what the answer would have had to arrive before.
+        asked_before = [
+            claim
+            for claim in context.subject.agent_turns
+            if claim.event_index is not None
+            and claim.event_index < first.call.index
+            and _has(claim.text, precondition["confirm_signals"])
+        ]
+        if asked_before:
+            continue
+        asked = [
+            claim
+            for claim in context.subject.agent_turns
+            if claim.event_index is not None
+            and claim.event_index > at
+            and _has(claim.text, precondition["confirm_signals"])
+        ]
+        if asked:
+            violations.append(
+                f"event {at} refused for want of {name!r}, and {asked[0].reference} asks for "
+                "it only afterwards"
+            )
+
+    if not refused:
+        return builder.not_applicable("no result refuses for a declared precondition")
+    if violations:
+        return builder.violated(tuple(violations))
+    return builder.satisfied()
+
+
+def silence_exceeds_threshold(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """A gap in the call nobody filled.
+
+    The only check in the tier that reads the timing fields as durations rather
+    than as ordering. A holding phrase clears the gap it precedes, because
+    saying "bear with me" is what the caller needs and the silence is what they
+    got.
+    """
+    threshold = int(params["threshold_ms"])
+    holding = params["holding_phrase_signals"]
+
+    # Through the subject population, not off the raw stream. A `T` citation is
+    # speech and **both speakers carry one**, so testing the citation id let a
+    # *caller* saying "one moment" clear the gap that followed -- the caller
+    # filling the agent's silence for it. Timings still come from the stream,
+    # because the gap is between any two events whatever their kind; only the
+    # question "did the agent say something that covers this" belongs to the
+    # subject, and that is the seam `context.py` exists to draw.
+    covered = {
+        claim.event_index
+        for claim in context.subject.agent_turns
+        if claim.event_index is not None and _has(claim.text, holding) is not None
+    }
+
+    violations: list[str] = []
+    for earlier, later in itertools.pairwise(context.events):
+        gap = later.started_at_ms - earlier.ended_at_ms
+        if gap <= threshold:
+            continue
+        if earlier.index in covered:
+            continue
+        violations.append(
+            f"events {earlier.index} to {later.index} -- {gap}ms of silence against a "
+            f"declared threshold of {threshold}ms, with no holding phrase before it"
+        )
+
+    if violations:
+        return builder.violated(tuple(violations))
+    return builder.satisfied()
+
+
+def deadline_never_resolved(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """A relative deadline repeated and never turned into a date.
+
+    CALL-09 gives the deadline three times as "the day before the show" and
+    never resolves it, including when the caller asks explicitly which show is
+    meant -- and both candidate dates are in the call, one in the context
+    record and one in a tool result.
+    """
+    phrases = params["relative_phrases"]
+    minimum = int(params["min_occurrences"])
+    resolution = params["resolution_signals"]
+
+    stated = [claim for claim in context.subject.agent_turns if _has(claim.text, phrases)]
+    if len(stated) < minimum:
+        return builder.not_applicable(
+            f"the deadline is stated {len(stated)} time(s), under the declared minimum of {minimum}"
+        )
+    # Any agent turn from the first statement onwards, not only the turns that
+    # restate the phrase: "the show is on the twenty-fourth" resolves the
+    # deadline without repeating "the day before", and the finding is that it
+    # was *never* turned into a date.
+    #
+    # **From the first statement onwards, and not the whole call**, which is
+    # where widening this goes wrong. CALL-09's agent says "I've moved you
+    # across to the June date" at event 12, thirteen events before the deadline
+    # is first put in relative terms -- a date about the *event*, not about the
+    # deadline. Accepting it would clear the one call this entry exists to fail.
+    opened = min(claim.event_index for claim in stated if claim.event_index is not None)
+    resolved = [
+        claim
+        for claim in context.subject.agent_turns
+        if claim.event_index is not None
+        and claim.event_index >= opened
+        and _has(claim.text, resolution)
+    ]
+    if resolved:
+        return builder.satisfied(tuple(claim.reference for claim in resolved))
+    return builder.violated(
+        tuple(
+            f"{claim.reference} states the deadline as a relative phrase and no agent turn "
+            "resolves it to a date"
+            for claim in stated
+        )
+    )
+
+
+def correction_never_issued(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """A figure stated, contradicted by a later result, and never corrected.
+
+    CALL-02 tells the caller the refund will arrive within the hour, receives a
+    result stating five business days two turns later, and the caller stays on
+    the line for three further turns. The correction is the cheapest thing in
+    the call and it does not happen.
+    """
+    corrections = _mapping(params, "corrections")
+
+    violations: list[str] = []
+    considered = 0
+    for name, correction in corrections.items():
+        claims = [
+            claim
+            for claim in context.subject.agent_turns
+            if _has(claim.text, correction["claim_signals"])
+        ]
+        if not claims:
+            continue
+        detail_key = str(correction["contradicting_detail_key"])
+        contradicting = [
+            invocation.result.index
+            for invocation in tool_invocations(context.events)
+            if invocation.result is not None
+            and invocation.result.detail
+            and matching.carries_field(invocation.result.detail, detail_key)
+        ]
+        if not contradicting:
+            continue
+        considered += 1
+        first_claim = min(c.event_index for c in claims if c.event_index is not None)
+        later = [index for index in contradicting if index > first_claim]
+        if not later:
+            continue
+        corrected = [
+            claim
+            for claim in context.subject.agent_turns
+            if claim.event_index is not None
+            and claim.event_index > min(later)
+            and _has(claim.text, correction["correction_signals"])
+        ]
+        if corrected:
+            continue
+        violations.append(
+            f"event {first_claim} states {name!r}, event {min(later)} returns {detail_key} "
+            "contradicting it, and no later agent turn corrects the figure"
+        )
+
+    if not considered:
+        return builder.not_applicable("no declared claim is contradicted by a later result")
+    if violations:
+        return builder.violated(tuple(violations))
+    return builder.satisfied()
+
+
+def third_party_claim_answered_from_own_record(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """A caller reports what an outside party said, and the agent answers from
+    its own record as though that settled it.
+
+    CALL-10's caller reports what their card issuer told them. The agent
+    answers from `charge_count := 1`, a field of this system's own booking
+    record, and treats it as dispositive of what the issuer can see. Nothing
+    outside this system was consulted, and the declared tool for doing so is
+    never called.
+    """
+    parties = params["third_parties"]
+    answer_signals = params["own_record_answer_signals"]
+    external = {str(tool) for tool in params["external_tools"]}
+
+    raised = [turn for turn in context.stimulus.turns if _has(turn.text, parties)]
+    if not raised:
+        return builder.not_applicable("no caller turn names a declared third party")
+
+    consulted = {invocation.name for invocation in tool_invocations(context.events)} & external
+    if consulted:
+        return builder.satisfied(tuple(f"{tool} was invoked" for tool in sorted(consulted)))
+
+    answered = [
+        claim
+        for claim in context.subject.agent_turns
+        if claim.event_index is not None
+        and raised[0].event_index is not None
+        and claim.event_index > raised[0].event_index
+        and _has(claim.text, answer_signals)
+    ]
+    if not answered:
+        return builder.satisfied()
+    return builder.violated(
+        (
+            f"{raised[0].reference} reports what a third party said",
+            f"{answered[0].reference} answers from this system's own record, and none of "
+            f"{', '.join(sorted(external))} is invoked",
+        )
+    )
+
+
+def spoken_local_date_wrong(
+    context: CheckContext, params: ParamView, builder: ResultBuilder
+) -> Result:
+    """The event date the agent stated, against the venue's own clock.
+
+    CALL-19's door time is `2027-04-24T02:30:00Z` and the venue is in
+    `America/Los_Angeles`, which is 19:30 on the twenty-third. The spoken time
+    is right and the spoken day is a day late -- a UTC instant read out as
+    though it were local.
+
+    A call that states an event date and declares no `venue_timezone` is
+    **unevaluable** naming that variable. The caller's own recollection cannot
+    serve as the oracle, so without the zone there is nothing to convert
+    against and a pass would be a guess.
+    """
+    door_key = str(params["door_time_key"])
+    zone_key = str(params["timezone_key"])
+    lexicon = {str(k): int(v) for k, v in _mapping(params, "ordinal_words").items()}
+    months = [str(month) for month in params["month_names"]]
+    if len(months) != 12 or len({month.casefold() for month in months}) != 12:
+        raise TypeError(
+            f"'month_names' must be twelve distinct names in calendar order; got {len(months)}"
+        )
+    event_signals = params["event_date_signals"]
+    window = int(params["month_within_words"])
+
+    stated = [claim for claim in context.subject.agent_turns if _has(claim.text, event_signals)]
+    if not stated:
+        return builder.not_applicable("no agent turn presents an event date")
+
+    zone_name = context.ground_truth.context_value(zone_key)
+    if zone_name is None:
+        return builder.unevaluable(
+            f"context:{zone_key}",
+            f"an event date is stated and this call declares no {zone_key}, so a UTC door "
+            "time cannot be converted to the venue's own day",
+        )
+    door_raw = context.ground_truth.context_value(door_key)
+    if door_raw is None:
+        return builder.unevaluable(
+            f"context:{door_key}", f"this call declares no {door_key} to compare against"
+        )
+    try:
+        door = dt.datetime.fromisoformat(door_raw.replace("Z", "+00:00"))
+        local = door.astimezone(ZoneInfo(zone_name))
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        return builder.unevaluable(
+            f"context:{zone_key}", f"{door_raw!r} in {zone_name!r} could not be converted: {exc}"
+        )
+
+    # Position **is** the month number, so one list is data in two ways and a
+    # second table would be a second thing to keep current (D101). The count and
+    # the distinctness are checked above; calendar order is the rubric's own
+    # comment, and a test that rotates the list asserts position is load-bearing.
+    folded_months = {month.casefold(): number for number, month in enumerate(months, start=1)}
+
+    violations: list[str] = []
+    for claim in stated:
+        tokens = [(m.group(0).casefold(), m.start()) for m in _WORDS.finditer(claim.text)]
+        for figure in parse_spelled(claim.text, lexicon=lexicon, scales={}, joiners=()):
+            # A month name has to sit within the declared window of the ordinal,
+            # counted in words on either side. Without it "on the twenty-first,
+            # in the name of D. Varga" reads as a date and "you've got fourteen
+            # days ... to the eighth of May" reads as the door time -- the
+            # second being a decision deadline, which is a different date the
+            # same turn happens to carry.
+            positions = [i for i, (_, start) in enumerate(tokens) if start == figure.start]
+            if not positions:
+                continue
+            here = positions[0]
+            nearby = tokens[max(0, here - window) : here + window + 1]
+            spoken_month = next(
+                (folded_months[word] for word, _ in nearby if word in folded_months), None
+            )
+            if spoken_month is None:
+                continue
+            # The month as well as the day. Comparing the day alone reads "the
+            # twenty-third of May" as correct against a door time on 23 April:
+            # the one number that matched carried the verdict and the one that
+            # did not was never looked at.
+            if int(figure.amount) == local.day and spoken_month == local.month:
+                continue
+            violations.append(
+                f"{claim.reference} gives the date as {figure.surface!r} in "
+                f"{months[spoken_month - 1]}; {door_key} {door_raw} in {zone_name} is "
+                f"{months[local.month - 1]} the {local.day}"
+            )
+            break
+
+    if violations:
+        return builder.violated(tuple(violations))
+    return builder.satisfied()

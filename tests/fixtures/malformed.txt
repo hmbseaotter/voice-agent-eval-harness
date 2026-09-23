@@ -1,0 +1,31 @@
+#format: voice-agent-eval-harness/transcript v2
+
+[call]
+call_id: CALL-92
+agent_id: fixture
+agent_version: 1
+environment: test
+direction: inbound
+from_number: +1 (415) 555-0192
+to_number: +1 (415) 555-0100
+started_at: 2027-01-01T00:00:00.000Z
+answered_at: 2027-01-01T00:00:01.000Z
+ended_at: 2027-01-01T00:00:30.000Z
+duration_ms: 30000
+disconnection_reason: caller_hangup
+outcome: resolved
+outcome_reason: fixture
+
+[context]
+# none
+
+[events]
+  1 |  0:01.000 |  0:04.000 | CALLER      | A well-formed line.
+  2 |  0:05.000    0:07.000   AGENT        this line is missing its pipe separators entirely
+  3 |  0:08.000 |  0:10.000 | AGENT       | Another well-formed line.
+  9 |  0:11.000 |  0:13.000 | AGENT       | An index that jumps out of sequence.
+ 10 |  0:14.000 |  0:16.000 | SHOUTS      | An event kind that is not in the closed set.
+    |           |           |             | A continuation whose event above it was rejected.
+ 11 |  0:19.000 |  0:17.000 | AGENT       | An event that ends before it starts.
+ 12 |  0:20.000 |  0:22.000 | AGENT       | A well-formed line after the damage.
+ 13 |  0:23.000 |  0:30.000 | CALLER      | A final well-formed line.

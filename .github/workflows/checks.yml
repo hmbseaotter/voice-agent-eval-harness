@@ -1,0 +1,255 @@
+name: checks
+
+# D28. Two Rules already assumed CI existed before anything specified it —
+# D20's README link check ("run in CI alongside the other link checks") and,
+# indirectly, D8, which chose replay mode specifically so that a byte-identical
+# golden-report regression in CI would be possible. A guard nothing runs is a
+# guard that holds only on the days someone remembers.
+#
+# This started as a floor: when it was written the harness package did not
+# exist, so there was nothing to type-check or lint and only the interface
+# scanner and its tests ran. Phase 1 pulled the extraction tier forward from
+# phase 2, so the package exists now and the type check and both linters join
+# here as that comment said they would. The golden-report regression this
+# comment once listed as outstanding is the step below, added at P4.
+#
+# The scanner step is the one that could not be replaced by a local hook: it is
+# the only check that can catch drift in a repository other than the one being
+# committed to, and the build is when both repositories get edited most.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the harness
+        uses: actions/checkout@v7
+        with:
+          # Every tag, and the history they point into (D166). The obligations
+          # register reads whether `rubric-frozen-v1` exists, and the default
+          # shallow checkout fetches no tags, so every row that tag fired would
+          # read as a claim about an event that never happened.
+          fetch-depth: 0
+
+      - name: Check out the severity tool alongside it
+        uses: actions/checkout@v7
+        with:
+          repository: hmbseaotter/comparative-judgment
+          path: comparative-judgment
+          # No token is passed, and the absence is deliberate. CJ_READ_TOKEN
+          # carried Contents: read here while the sibling was private, because the
+          # default GITHUB_TOKEN is scoped to this repository alone and the
+          # checkout had failed on every run before it (D84). The sibling is public
+          # since 2026-09-21 and the token was deleted on 2026-09-22, so the
+          # default token reaches it. The expression that stood here OR-ed that
+          # secret with the default token, which is not the safe shape it looks
+          # like: an expired secret is still a non-empty string, so it would be
+          # passed rather than fallen back from, and a checkout needing no token
+          # would fail on a dead one. If the sibling is ever made private again,
+          # add the token back on its own line and this comment with it.
+        # The interface this scanner checks spans two repositories, so one of
+        # them has to be fetched. Failure here is not fatal to the run: a
+        # private or renamed sibling should not turn every build red, and the
+        # scanner's own test skips when the checkout is absent rather than
+        # failing. That skip is visible in the test output.
+        #
+        # D84 revisits the last sentence rather than the choice. Visible is not
+        # the same as noticed: this skipped every run for months, in test output
+        # nobody read, exactly as its counterpart in the held-out repository did
+        # in a warning nobody read. `continue-on-error` stays -- the guard should
+        # report which check did not run, not surface a raw API error -- but once
+        # the token is in place the absence stops being tolerated silently.
+        continue-on-error: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install the locked environment
+        # --frozen, not --locked: the lockfile is the pinned input, and CI must
+        # fail if pyproject.toml has drifted from it rather than quietly
+        # re-resolving. W35 is the defect this posture exists to avoid — a
+        # project whose thesis is reproducibility, resolving fresh versions on
+        # every build.
+        run: uv sync --frozen --all-groups
+
+      - name: Type check
+        run: uv run --no-sync mypy
+
+      - name: Lint
+        run: uv run --no-sync ruff check .
+
+      - name: Format check
+        run: uv run --no-sync ruff format --check .
+
+      - name: Extraction runs and the corpus parses clean
+        # The phase-1 acceptance criterion is a zero unparsed-line count, and
+        # this is the command that produces it. Running it here means a
+        # transcript edited into a state the grammar cannot read fails the
+        # build rather than waiting for someone to run the extractor by hand.
+        run: uv run --no-sync python -m harness.extract
+
+      - name: Tests
+        # Writes the JUnit report once. Both phase verifiers read it rather
+        # than each spawning their own pytest: the suite ran three times per
+        # push until 2026-09-07, while D113 claimed there was one run to read.
+        # A report older than the newest source file is re-run by the verifier
+        # rather than trusted, so reuse never hides staleness.
+        run: uv run --no-sync pytest -q --junit-xml=build/phase1-junit.xml
+
+      - name: The deterministic tier runs with no model call
+        # `harness run --tier assert` is an acceptance criterion, and the design
+        # set is seeded with defects by construction -- so this exits 1 and that
+        # is the tier working (D105). `|| [ $? -eq 1 ]` accepts exactly that and
+        # nothing else: a 2 is a run that could not start, and it still fails
+        # the build.
+        run: uv run --no-sync harness run --tier assert || [ $? -eq 1 ]
+
+      - name: Phase 1 acceptance criteria
+        # Phase 2 must not regress phase 1, and "must not" is a claim until
+        # something runs it on every build rather than when somebody remembers.
+        run: uv run --no-sync python tools/verify_phase1.py --junit build/phase1-junit.xml
+
+      - name: Phase 2 acceptance criteria
+        # A module, not a path: it imports the suite runner from the phase-1
+        # verifier rather than keeping a second copy (D113), and only `-m`
+        # makes `tools` importable as a package.
+        run: uv run --no-sync python -m tools.verify_phase2 --junit build/phase1-junit.xml
+
+      - name: Phase 3 acceptance criteria
+        # Added with the judged tier, and its absence had already cost
+        # something: the criterion naming the no-clause guard went on pointing
+        # at a test that had been replaced, and only a manual run reported
+        # EVIDENCE MISSING. A verifier nobody runs on every push is a verifier
+        # that has quietly stopped verifying -- which is the argument the
+        # phase-1 step makes one screen up, arriving one phase later.
+        #
+        # Reads the same JUnit report as the other two. Eight of its 23 criteria
+        # carry caveats, and three of those describe what a live run established
+        # rather than what this build can: the tests it names assert against the
+        # committed reference log, which is in the tree, so the step needs no
+        # credential and issues no call.
+        run: uv run --no-sync python -m tools.verify_phase3 --junit build/phase1-junit.xml
+
+      - name: Phase 4 acceptance criteria
+        # The fourth verifier, wired in on the day it was written. Phase 3's
+        # was not, and its absence cost something before anyone noticed: a
+        # criterion went on naming a test that had been replaced, and only a
+        # manual run reported EVIDENCE MISSING. Reads the same JUnit report as
+        # the other three.
+        run: uv run --no-sync python -m tools.verify_phase4 --junit build/phase1-junit.xml
+
+      - name: Phase 5 acceptance criteria
+        # Wired in while its phase is still open (D176). The criteria this
+        # repository has built are ticked, the coverage report's among them
+        # (D188); the ones the held-out repository's gate asserts are declared
+        # under their own heading and never ticked, so the step is green on what
+        # exists and says what it cannot check. Reads the same JUnit report as the
+        # other four.
+        run: uv run --no-sync python -m tools.verify_phase5 --junit build/phase1-junit.xml
+
+      - name: Phase 6 acceptance criteria
+        # Wired in on the day the phase's contract was read (D201), while the
+        # phase is open, as phase 5's was. What needs no model call is ticked --
+        # the second adapter, the log inspector, per-instance severity and the
+        # README's license table -- and prompt caching, judge-model comparison
+        # and the design document are declared not yet built under their own
+        # heading. Reads the same JUnit report as the other five.
+        run: uv run --no-sync python -m tools.verify_phase6 --junit build/phase1-junit.xml
+
+      - name: The report is byte-identical to the committed snapshot
+        # D8 chose replay mode in order to have this, and it is the last of the
+        # capabilities that decision named to arrive. **The command is run
+        # here, not only the renderer**: the suite's own snapshot test covers
+        # the rendering, and this covers the thing a reader is told to type.
+        #
+        # `diff` rather than a Python comparison, so the failure output is the
+        # diff itself. A regression in a report is read, not counted.
+        run: |
+          uv run --no-sync harness report --out build/report.ci.md
+          diff -u snapshots/report.md build/report.ci.md
+
+      - name: Every identifier named in prose resolves
+        # The last documented gate that ran nowhere but a handover. Its own
+        # docstring is the argument for putting it here: four reading sweeps
+        # happened before it was written and each found what it looked at,
+        # while one mechanical class-check found a live defect in two minutes
+        # that a full suite and two sweeps had passed over.
+        #
+        # `--live-only` is the default and is deliberate: the decision record
+        # describes states this project has since left, and D53 is explicit
+        # that a record edited to agree with later decisions stops being a
+        # record. So its historical prose is skipped for path checks rather
+        # than corrected into agreement.
+        #
+        # What it does NOT check is the more useful half and is stated in the
+        # tool: it does not read prose for truth. Roughly two hundred existence
+        # claims in these documents are of a kind no script settles, and this
+        # step passing is not a claim about them.
+        run: uv run --no-sync python tools/statement_inventory.py
+
+      - name: Every control is driven red by its own defect
+        # The register says which control guards which fix. That is a claim in a
+        # document, and a claim in a document is what this project keeps finding
+        # to have gone stale -- so it is re-derived here rather than read. Each
+        # entry in control-mutations.yaml is applied to a copy of the tree and
+        # the named control must FAIL there and PASS without it.
+        #
+        # Here rather than left to whoever remembers, for the reason the phase-1
+        # step gives one screen up: a mechanism nobody runs is a mechanism that
+        # has quietly stopped verifying, which is the exact defect the controls
+        # this step checks were planted to catch.
+        #
+        # Exit 2 is a run that could not be made -- an anchor that matches no
+        # line, or two -- and fails the build like any other refusal. Exit 1 is a
+        # control that stayed green with its defect restored, which is a finding.
+        run: uv run --no-sync python tools/verify_controls.py
+
+      - name: No held-out transcript in this working tree
+        # The only mechanism protecting the held-out set, and it re-runs at
+        # every later phase rather than only the one that authored it. The
+        # property has to hold for the life of the project, and the build
+        # prompt that first stated it is superseded at the end of phase 1.
+        run: uv run --no-sync python tools/check_holdout_absence.py
+
+      - name: Findings view is not stale
+        # A generated file nobody verifies drifts from its source and quietly
+        # becomes a second, disagreeing source.
+        run: uv run --no-sync python -m harness.findings_view --check
+
+      - name: Interface agreement across both repositories
+        # Every document that describes the interface, not just the two specs.
+        # The fourth instance of the stale-cross-claim class lived in a decision
+        # record — a file the two-argument version was never pointed at.
+        run: |
+          if [ -d comparative-judgment/specs ]; then
+            uv run --no-sync python tools/check_spec_interface.py \
+              specs/voice-agent-eval-harness.md,specs/voice-agent-eval-harness.decisions.md,specs/voice-agent-eval-harness.build-prompt.md \
+              comparative-judgment/specs/comparative-judgment.md,comparative-judgment/specs/comparative-judgment.decisions.md
+          else
+            # Was a warning. It fired on every run from the day this step was
+            # added until 2026-09-06, because the sibling was private and the
+            # default token could not read it -- so the interface was never once
+            # compared, and the build said success each time. CJ_READ_TOKEN fixed
+            # the cause and was retired on 2026-09-22 when the sibling went
+            # public; this line is what stops the cause returning quietly if that
+            # ever reverses. See D84.
+            echo "::error::comparative-judgment was not checked out, so the interface"
+            echo "::error::between the two repositories was not compared. It is public,"
+            echo "::error::so the default token should reach it: check that it still is,"
+            echo "::error::and if it is not, pass a token with Contents: read on it."
+            exit 1
+          fi

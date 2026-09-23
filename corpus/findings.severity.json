@@ -1,0 +1,705 @@
+{
+  "anchor_set_version": "1",
+  "calibration": {
+    "critical_high": "Critical is whatever can enable insight into the account to a non-owner, potentially enabling misuse of the account and/or associated payment instruments.",
+    "high_medium": "",
+    "medium_low": ""
+  },
+  "comparison_log_hash": "de34d67493879840a4f867cb462c873a52205bb2581d57658584dc87f0466850",
+  "cuts": [
+    {
+      "above_id": "F-78",
+      "below_id": "F-83",
+      "between": [
+        "F-82"
+      ],
+      "gap": 0.7119984819021736,
+      "name": "critical_high"
+    },
+    {
+      "above_id": "F-41",
+      "below_id": "F-46",
+      "between": [],
+      "gap": 0.05131558342726095,
+      "name": "high_medium"
+    },
+    {
+      "above_id": "F-61",
+      "below_id": "F-64",
+      "between": [
+        "F-29"
+      ],
+      "gap": 0.12226833601656256,
+      "name": "medium_low"
+    }
+  ],
+  "run_id": "b5b6c281ec6d7c14",
+  "schema_version": "3",
+  "severities": [
+    {
+      "appearances": 10,
+      "content_hash": "2dd43c1b0a860c4f0754c036a8fee625102cb643b8ac0215fdb740614527a22a",
+      "id": "F-01",
+      "informative": 4,
+      "severity": "high",
+      "theta": 2.5718648293878434
+    },
+    {
+      "appearances": 10,
+      "content_hash": "a0d69206f0f1d852f2041356bf02d4aee162a94e56e0363defebb67bbe7f8061",
+      "id": "F-02",
+      "informative": 2,
+      "severity": "high",
+      "theta": 1.7686974540770966
+    },
+    {
+      "appearances": 10,
+      "content_hash": "0589441826bd241442f44032c758233714303bf58f6281543940176852db3a96",
+      "id": "F-03",
+      "informative": 2,
+      "severity": "high",
+      "theta": 1.904743264010435
+    },
+    {
+      "appearances": 10,
+      "content_hash": "f10a4f087c93156498c58cd76b6d9214e1c10138efc03d2f35a9b1faeeb601f4",
+      "id": "F-04",
+      "informative": 3,
+      "severity": "critical",
+      "theta": 3.995989865855045
+    },
+    {
+      "appearances": 10,
+      "content_hash": "1c5d3742d485d91dbce08ef4df4a046fff0dc33ec2193b21a48c0cb882602638",
+      "id": "F-05",
+      "informative": 8,
+      "severity": "medium",
+      "theta": 0.8216577709781646
+    },
+    {
+      "appearances": 10,
+      "content_hash": "9d09175731277d8f6b2f7541a2f67cc20d53ec8812b6af43d621f157033cf431",
+      "id": "F-06",
+      "informative": 6,
+      "severity": "medium",
+      "theta": 1.0375225179684087
+    },
+    {
+      "appearances": 10,
+      "content_hash": "6cade2298dd3f1b87ffe5df74300248e1d7e16cad2c896d39b5b800f2e71733d",
+      "id": "F-07",
+      "informative": 9,
+      "severity": "medium",
+      "theta": 0.7405620329401708
+    },
+    {
+      "appearances": 10,
+      "content_hash": "3d02261cf1ec63d78f051a40322ddcd26438655874b31d6db140f0418c234f4d",
+      "id": "F-08",
+      "informative": 6,
+      "severity": "medium",
+      "theta": 1.1184423441533515
+    },
+    {
+      "appearances": 10,
+      "content_hash": "70010dc862ad5324df47d6d10fe37e0377bb752186ee7b8b436ccced684b0ea9",
+      "id": "F-09",
+      "informative": 4,
+      "severity": "medium",
+      "theta": 0.7850120495105564
+    },
+    {
+      "appearances": 10,
+      "content_hash": "8e1cec189f4b8f2e131d852038806aeeb7c6952c1f56f34bd03dafa4d444a530",
+      "id": "F-10",
+      "informative": 6,
+      "severity": "medium",
+      "theta": 0.8741144486662464
+    },
+    {
+      "appearances": 10,
+      "content_hash": "006eb3eb34d117b67bc80b1863963c30c4257d8a87db98d9b34b80307c4b1adc",
+      "id": "F-11",
+      "informative": 10,
+      "severity": "low",
+      "theta": -0.48766118199053765
+    },
+    {
+      "appearances": 10,
+      "content_hash": "bc3c167c473b9aaf371bbd9c69a4a05fe376f57672e505ffc938b695bdeb1214",
+      "id": "F-12",
+      "informative": 4,
+      "severity": "high",
+      "theta": 2.3802363493887944
+    },
+    {
+      "appearances": 10,
+      "content_hash": "e861e332ecf9ba0e989a7df3d68d24461712a881e11a8e3b5f850b8fc69833f8",
+      "id": "F-13",
+      "informative": 10,
+      "severity": "low",
+      "theta": -1.9442518023177398
+    },
+    {
+      "appearances": 11,
+      "content_hash": "1570cb05a459337cf998aa294a4bf33bd3459ce1e7a5573f6106d4c18271a405",
+      "id": "F-14",
+      "informative": 3,
+      "severity": "high",
+      "theta": 2.416587234899192
+    },
+    {
+      "appearances": 10,
+      "content_hash": "e7a5f47a17ba4f949c30b512cca9d2ed544d2824345445d31f8d85fea1af6912",
+      "id": "F-15",
+      "informative": 10,
+      "severity": "low",
+      "theta": -1.0307287054985543
+    },
+    {
+      "appearances": 10,
+      "content_hash": "7ea45e397d2b37e7c10039d240979e8b9b8bc9302b14a9bd4e2db2308fa95704",
+      "id": "F-16",
+      "informative": 10,
+      "severity": "low",
+      "theta": -1.8429794463870435
+    },
+    {
+      "appearances": 10,
+      "content_hash": "92c6c3e63c5d895c679215c0fb71cd136799f4abdee88ff6a4be2276ae9f2307",
+      "id": "F-17",
+      "informative": 7,
+      "severity": "medium",
+      "theta": 0.2868221233824145
+    },
+    {
+      "appearances": 10,
+      "content_hash": "a32f3a2e6fb3f0f9dbb9fe4159d3fb0d55e283732f3581db09852198b6b3ed5c",
+      "id": "F-18",
+      "informative": 6,
+      "severity": "medium",
+      "theta": 0.7192338076535448
+    },
+    {
+      "appearances": 10,
+      "content_hash": "cce42c2aad53272a599ee010cf71635209c6944b86ab1bc71ef00c32546e6232",
+      "id": "F-19",
+      "informative": 9,
+      "severity": "low",
+      "theta": -1.5711539607820415
+    },
+    {
+      "appearances": 10,
+      "content_hash": "b683c9bf565f7cdcf5828bed20026a80730e16e655c986f267476a2d824ff5d4",
+      "id": "F-20",
+      "informative": 9,
+      "severity": "low",
+      "theta": -2.303732500471384
+    },
+    {
+      "appearances": 10,
+      "content_hash": "b145b60588555bab5669ab85e52c60dbeb23a0935d6eafdd15d99625ffdae7f0",
+      "id": "F-21",
+      "informative": 7,
+      "severity": "medium",
+      "theta": 0.9201518877259324
+    },
+    {
+      "appearances": 10,
+      "content_hash": "3e3064c4d2f86bf54ff5b6265c3b6f21891667a04a222dbde0f754ad3608009b",
+      "id": "F-22",
+      "informative": 4,
+      "severity": "high",
+      "theta": 1.9208633776350936
+    },
+    {
+      "appearances": 10,
+      "content_hash": "5768d6b9b56a8f043ffdb4b5972a74b6eaa91f1716d71670ffd81c00896335e9",
+      "id": "F-23",
+      "informative": 10,
+      "severity": "low",
+      "theta": -0.7462770296443421
+    },
+    {
+      "appearances": 10,
+      "content_hash": "000ec1587203b78a03a872ea5139c46dd6ed9ccedf33f43e1ee16e06c5756aa3",
+      "id": "F-24",
+      "informative": 9,
+      "severity": "low",
+      "theta": -1.1931769447066083
+    },
+    {
+      "appearances": 10,
+      "content_hash": "bb30e6e0b250ad948cd75d51ef7b6bd7f16ab4103bbc4120b5693e55aefe3d2e",
+      "id": "F-25",
+      "informative": 6,
+      "severity": "high",
+      "theta": 1.7998092525299458
+    },
+    {
+      "appearances": 10,
+      "content_hash": "9037bebe22d476ef846bf0952e9d9a3471e4d955fce97355e859d98c68db4ffb",
+      "id": "F-26",
+      "informative": 8,
+      "severity": "medium",
+      "theta": 0.37012129963216645
+    },
+    {
+      "appearances": 10,
+      "content_hash": "c9832465a78870e9774cc87f2b6c759aeca8463417bcaabd26edbd55a4aecdc7",
+      "id": "F-28",
+      "informative": 8,
+      "severity": "medium",
+      "theta": 0.6802402814405788
+    },
+    {
+      "appearances": 10,
+      "content_hash": "7a50fc2cc8987bab183ce547af3223055578cf9bbcc4d7d2d0b2e6d1b45045b8",
+      "id": "F-29",
+      "informative": 8,
+      "severity": "medium",
+      "theta": -0.13036798871940913
+    },
+    {
+      "appearances": 10,
+      "content_hash": "d03eb439308dcfe60bce17b5539e73dd0ed26d2d85abe251c1677086ddcf22d0",
+      "id": "F-30",
+      "informative": 4,
+      "severity": "medium",
+      "theta": 0.9157268055730847
+    },
+    {
+      "appearances": 10,
+      "content_hash": "8c7a2abdd14007f421d394e83923d2df8b44e5e7e8023d60bc8e240f2d0264f8",
+      "id": "F-32",
+      "informative": 7,
+      "severity": "low",
+      "theta": -0.4553030905319449
+    },
+    {
+      "appearances": 10,
+      "content_hash": "d3bf2603e2e56774893847e7272ddbb06324982ab0e52fb0641fd38bbca62753",
+      "id": "F-33",
+      "informative": 10,
+      "severity": "low",
+      "theta": -0.6755669255608592
+    },
+    {
+      "appearances": 10,
+      "content_hash": "dd56ec225c77b3f3555858e35e5604d2a9446e217569e2214097273f06f4856c",
+      "id": "F-34",
+      "informative": 10,
+      "severity": "low",
+      "theta": -2.8493714726367316
+    },
+    {
+      "appearances": 10,
+      "content_hash": "2d8a757956730d1fa27f9d1988c5a4cdea4519cbed8c0988563513aeea1446ec",
+      "id": "F-35",
+      "informative": 6,
+      "severity": "low",
+      "theta": -1.8604902128308722
+    },
+    {
+      "appearances": 11,
+      "content_hash": "2fc19a12028aebe08c6cfb8dcfba618d4f2d57436bd9c5c4dad3b71f50edc61b",
+      "id": "F-36",
+      "informative": 9,
+      "severity": "low",
+      "theta": -0.28933356679013
+    },
+    {
+      "appearances": 10,
+      "content_hash": "c660c07a66640045a5f3bc7102f07bb49d253c11558b383ba4b9f861462b1349",
+      "id": "F-37",
+      "informative": 6,
+      "severity": "low",
+      "theta": -0.7367701503793195
+    },
+    {
+      "appearances": 10,
+      "content_hash": "47e8c5018f0aceb470065ab4d24c6c3f49a9a61ad8ca0b29794b8d99b54729e8",
+      "id": "F-38",
+      "informative": 7,
+      "severity": "low",
+      "theta": -1.1652027501944096
+    },
+    {
+      "appearances": 10,
+      "content_hash": "6d7a7c00a34078bfb06e0414c304fea54ba32162c27def9d8b6167a0205be8c4",
+      "id": "F-39",
+      "informative": 9,
+      "severity": "low",
+      "theta": -1.330340383805866
+    },
+    {
+      "appearances": 10,
+      "content_hash": "603f3d84e091cebdec097957232e9c5d8515a7dca4fb8cf6dd0a8a5ed4796387",
+      "id": "F-40",
+      "informative": 8,
+      "severity": "medium",
+      "theta": 1.298325248917764
+    },
+    {
+      "appearances": 10,
+      "content_hash": "3fc6c522824d6f3a5a219567b90e1026c9dc107fa9158c2279b2b49782a4a693",
+      "id": "F-41",
+      "informative": 5,
+      "severity": "high",
+      "theta": 1.5069505747039462
+    },
+    {
+      "appearances": 10,
+      "content_hash": "4d1eb67a68eb3cb9af813f738d6b181a532e59251715d000a5f833d618af6a1c",
+      "id": "F-42",
+      "informative": 9,
+      "severity": "low",
+      "theta": -4.485052479110131
+    },
+    {
+      "appearances": 10,
+      "content_hash": "b53182dfe1c8ecfdad45038cf855b285b125b5a0f9eb8035fff30a2974d4c316",
+      "id": "F-43",
+      "informative": 8,
+      "severity": "low",
+      "theta": -3.2036055410409046
+    },
+    {
+      "appearances": 10,
+      "content_hash": "1b950a27dc83684e8090f785f6f2db3f53e546326e4275c727c48f4ec8de01ce",
+      "id": "F-44",
+      "informative": 10,
+      "severity": "low",
+      "theta": -3.9684785473954833
+    },
+    {
+      "appearances": 10,
+      "content_hash": "142b3a548fec3ac0e6ae23c0ddf97a5176fcfda4ebe240e5f13e160968f2286d",
+      "id": "F-45",
+      "informative": 4,
+      "severity": "critical",
+      "theta": 3.722551571438533
+    },
+    {
+      "appearances": 10,
+      "content_hash": "d43e9b0c2203ec8751c06cf0d076eeb75d8a73fe1dbee25531bd18dc6760d4b7",
+      "id": "F-46",
+      "informative": 6,
+      "severity": "medium",
+      "theta": 1.4556349912766853
+    },
+    {
+      "appearances": 10,
+      "content_hash": "72c10ea0a6bf199f93486bc12c88d8522935054d8643526a043120e22ce5e9f3",
+      "id": "F-47",
+      "informative": 9,
+      "severity": "low",
+      "theta": -1.337042344379823
+    },
+    {
+      "appearances": 10,
+      "content_hash": "c62dcb775ee0c665874db22117224756321f79603897175eb519187b49dfec78",
+      "id": "F-48",
+      "informative": 9,
+      "severity": "low",
+      "theta": -2.1640134913169438
+    },
+    {
+      "appearances": 10,
+      "content_hash": "4efc9f91d87d6901860f016ccde245af6fa885b02033381f73d66055df64e83a",
+      "id": "F-50",
+      "informative": 5,
+      "severity": "medium",
+      "theta": 1.2388719863051705
+    },
+    {
+      "appearances": 10,
+      "content_hash": "203f0fad8271f86a3bb54a54c89529fac0b9b3e4d66a8dbdbc89ce8cc95f7353",
+      "id": "F-51",
+      "informative": 8,
+      "severity": "medium",
+      "theta": 0.12210521515326211
+    },
+    {
+      "appearances": 10,
+      "content_hash": "686fe12973b2f09c74d8b9d3f2fa863baa48c58d8274e72c90731d35ae4dabc2",
+      "id": "F-52",
+      "informative": 9,
+      "severity": "low",
+      "theta": -1.2256468207192845
+    },
+    {
+      "appearances": 11,
+      "content_hash": "4c63ce4756f99215fe382f83cc41ca295afc197c6fedb991b693516c894a57b7",
+      "id": "F-53",
+      "informative": 8,
+      "severity": "medium",
+      "theta": 1.0161300259701407
+    },
+    {
+      "appearances": 10,
+      "content_hash": "af3c2585a67a75f0febf6bd0256b3e2a3e03e0c110be1908df2fce482f61843f",
+      "id": "F-55",
+      "informative": 10,
+      "severity": "low",
+      "theta": -1.1621427091425416
+    },
+    {
+      "appearances": 10,
+      "content_hash": "16a5d27ebc3565ba49fbbd9c83e225b772ae8cf89bab604d57897d141cc92728",
+      "id": "F-57",
+      "informative": 10,
+      "severity": "low",
+      "theta": -2.9990837797296557
+    },
+    {
+      "appearances": 10,
+      "content_hash": "e484453147163fc35c10c73121c423b10de9b23340d44208af42add4a1e39628",
+      "id": "F-58",
+      "informative": 10,
+      "severity": "low",
+      "theta": -2.050906345445144
+    },
+    {
+      "appearances": 10,
+      "content_hash": "6fc8d9816daee93332eee9d8e02124263843b1a202eafd306616b140a21790d9",
+      "id": "F-60",
+      "informative": 10,
+      "severity": "low",
+      "theta": -0.9790721654129813
+    },
+    {
+      "appearances": 10,
+      "content_hash": "3e88b35d894202082bea9fc3db6b31f7cc827fdc30646c2e255f60926aeb84a1",
+      "id": "F-61",
+      "informative": 6,
+      "severity": "medium",
+      "theta": -0.107917766770181
+    },
+    {
+      "appearances": 10,
+      "content_hash": "6a14910d75427b787e4784a3f4b09e852c34a9f2450270bd69db66f4cd434249",
+      "id": "F-62",
+      "informative": 9,
+      "severity": "medium",
+      "theta": -0.10507270216302747
+    },
+    {
+      "appearances": 10,
+      "content_hash": "f929adfdf149a2102ef2dfc20daf7defc2b6886b8a9f0fd972ca4faedc982f74",
+      "id": "F-63",
+      "informative": 6,
+      "severity": "medium",
+      "theta": 1.3684160897214184
+    },
+    {
+      "appearances": 10,
+      "content_hash": "e4cd88a93811f98dc02dae8c8a1e0c806b1fc3d0565942a44e3560c24a66c3dc",
+      "id": "F-64",
+      "informative": 8,
+      "severity": "low",
+      "theta": -0.23018610278674356
+    },
+    {
+      "appearances": 10,
+      "content_hash": "1e9082289f1cbffc1aa822ef87e692001b5365447033f633c9d76c20debef775",
+      "id": "F-65",
+      "informative": 4,
+      "severity": "high",
+      "theta": 1.6489543982128776
+    },
+    {
+      "appearances": 10,
+      "content_hash": "84d17fe92f2557a90e65b52686613d2e93c7d639077c7aa1f290e7b90a831920",
+      "id": "F-66",
+      "informative": 10,
+      "severity": "low",
+      "theta": -1.2762297208422622
+    },
+    {
+      "appearances": 10,
+      "content_hash": "2b63c1c5ebacc8e898d774a6d53ecb7e1c0b4bfde20419c2083933d28b4915e1",
+      "id": "F-67",
+      "informative": 7,
+      "severity": "medium",
+      "theta": 0.6146053546876977
+    },
+    {
+      "appearances": 10,
+      "content_hash": "4979c592eddc0c56383e87708f5a29952c321e61de96f67111937aaef9dc3f2a",
+      "id": "F-68",
+      "informative": 9,
+      "severity": "low",
+      "theta": -2.899846173844027
+    },
+    {
+      "appearances": 10,
+      "content_hash": "53d5695b0349d4276cb27fe836351163a9a0d6e402b86a9cdad09754aeed8446",
+      "id": "F-69",
+      "informative": 8,
+      "severity": "low",
+      "theta": -3.2474006461888623
+    },
+    {
+      "appearances": 10,
+      "content_hash": "701dc1e286a1fcdd81295b0e23de13c0eea79532999d0ac6084156863d5f4572",
+      "id": "F-70",
+      "informative": 7,
+      "severity": "low",
+      "theta": -2.6608189950917476
+    },
+    {
+      "appearances": 10,
+      "content_hash": "0531527db2b01b6648e65d0dc28f0038710dd1fc2778c06fb351c9c1af33dabd",
+      "id": "F-71",
+      "informative": 10,
+      "severity": "low",
+      "theta": -1.775767888124299
+    },
+    {
+      "appearances": 10,
+      "content_hash": "374342e7427feabbc025b2c883f3e3a7c761dfdeda7b1ecdd31e7aa4aa1156ec",
+      "id": "F-72",
+      "informative": 10,
+      "severity": "low",
+      "theta": -0.8507168514122331
+    },
+    {
+      "appearances": 10,
+      "content_hash": "6abc17a3ac84319f6c167fa6fbb9077ed66a381c1b39edd077d173ce08f627dc",
+      "id": "F-73",
+      "informative": 8,
+      "severity": "medium",
+      "theta": 0.2087526181826412
+    },
+    {
+      "appearances": 10,
+      "content_hash": "6cae211e6fab531db1a186482f1c0323a0c54ff81bfe660a0a669634e949d1a3",
+      "id": "F-74",
+      "informative": 6,
+      "severity": "high",
+      "theta": 2.0896833836798043
+    },
+    {
+      "appearances": 10,
+      "content_hash": "5ff084a46fbd8d25a617f8bb48883fecb6e9fa49b1677be169bde91ebcf1223a",
+      "id": "F-75",
+      "informative": 6,
+      "severity": "high",
+      "theta": 2.02069839545294
+    },
+    {
+      "appearances": 10,
+      "content_hash": "fcf1ec64a1d1f8c47070b57d7977ae993c6f6ab77b86dd08da28ae496575191b",
+      "id": "F-76",
+      "informative": 5,
+      "severity": "critical",
+      "theta": 3.5432239784305493
+    },
+    {
+      "appearances": 10,
+      "content_hash": "89bbfd3a0a9b686c9481752ada7ca6c05837ceb7a2355b06bf43e9df0856f3d8",
+      "id": "F-77",
+      "informative": 7,
+      "severity": "medium",
+      "theta": 0.025876251807208633
+    },
+    {
+      "appearances": 10,
+      "content_hash": "1b6303b4464ddf891a525a215751a9fbba84472c7eaf84fe9d2753a5f7eb2155",
+      "id": "F-78",
+      "informative": 5,
+      "severity": "critical",
+      "theta": 3.479987303185363
+    },
+    {
+      "appearances": 10,
+      "content_hash": "f214f3b3a38f9679deb21abb20faf662e5ac483cad94e8d0dacd29ee0d1067ae",
+      "id": "F-79",
+      "informative": 4,
+      "severity": "high",
+      "theta": 1.7652333585732665
+    },
+    {
+      "appearances": 10,
+      "content_hash": "58d700a7ff82b9b2868f3ecfdaff07d9e61cb38eb61a9a72a2d06d95c2085857",
+      "id": "F-80",
+      "informative": 9,
+      "severity": "medium",
+      "theta": 0.34842166799436447
+    },
+    {
+      "appearances": 10,
+      "content_hash": "f607436123907eeb0c7f3bc5f313c7dad782866b2c11c77b7fce333e5dd62382",
+      "id": "F-81",
+      "informative": 8,
+      "severity": "medium",
+      "theta": 0.014135790816443266
+    },
+    {
+      "appearances": 10,
+      "content_hash": "c29905dc2be11610fc29dd965725ff8f4d7ddf010219e79ce2bdfddfd55ccb47",
+      "id": "F-82",
+      "informative": 5,
+      "severity": "high",
+      "theta": 2.8137650714735987
+    },
+    {
+      "appearances": 10,
+      "content_hash": "7ca6a09a05c165648aaf6afd47b11e8a509b84d1049a7c48f280b73589fb3dcf",
+      "id": "F-83",
+      "informative": 3,
+      "severity": "high",
+      "theta": 2.7679888212831893
+    },
+    {
+      "appearances": 10,
+      "content_hash": "e3537d78fc4dfa4179cf3ecdb8d371e5d0ad79a2925be3349529a9898571dc15",
+      "id": "F-85",
+      "informative": 8,
+      "severity": "low",
+      "theta": -0.2743719122424875
+    },
+    {
+      "appearances": 10,
+      "content_hash": "c2deed703df7325428610e0f9ba6c9dc13c10dc1dd44e34390e161faa010c9cf",
+      "id": "F-86",
+      "informative": 7,
+      "severity": "medium",
+      "theta": -0.006231876306473077
+    },
+    {
+      "appearances": 10,
+      "content_hash": "d81c887b7f43601a4fea789f82d4bfa16c3d3ade9f1d72185d030613cc1a8e51",
+      "id": "F-87",
+      "informative": 10,
+      "severity": "low",
+      "theta": -3.2349439462821783
+    },
+    {
+      "appearances": 10,
+      "content_hash": "85f5c0e9f24f51a8ce3b8fbe6c4a707cb44ae9b4df4c2bf8e95928e7a66ab35c",
+      "id": "F-88",
+      "informative": 10,
+      "severity": "low",
+      "theta": -1.2553113008315115
+    },
+    {
+      "appearances": 10,
+      "content_hash": "e73a0b185eec05d43f3eba9875dd19e9f960c79e760917afeeac2f64da1b1c73",
+      "id": "F-89",
+      "informative": 10,
+      "severity": "low",
+      "theta": -3.9753507747951393
+    },
+    {
+      "appearances": 3,
+      "content_hash": "13886a11c7506a1da66ce8be6eb20004497d0fa0868a8eeb9f9adb4867a84446",
+      "id": "F-90",
+      "informative": 3,
+      "severity": "medium",
+      "theta": 1.3906203554016254
+    }
+  ],
+  "unplaced": []
+}

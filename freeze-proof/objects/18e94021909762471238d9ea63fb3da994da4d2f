@@ -1,0 +1,1462 @@
+"""The model transport seam: one request type, two implementations, one log.
+
+D8 settled that key-free running, the reproducibility proof and live usability
+are **not three features but one seam with a swappable transport**. This module
+is that seam. Everything above it -- the judged engine, the prompt renderer,
+the citation validator -- names `Transport` and never `anthropic`.
+
+Four properties are structural here rather than promised, because each of them
+is the kind of thing that decays into "wherever somebody remembered to".
+
+**Recording is unconditional, by wrapping rather than by discipline.**
+`RecordingTransport` is the only transport the engine is given, and it writes a
+run-log entry for every call that returns. There is no path to a judged call
+that omits its entry -- the same argument `ResultBuilder` makes for provenance,
+and for the same reason: W30 is a tier with no run provenance at all, in a
+project whose practice was diffing two runs. A replay run records too. That
+looks redundant until you ask what "every run-log entry carries a stop_reason;
+the count missing one is zero" is asserted over, and the answer has to be a log
+this run produced.
+
+**The ceiling refuses before the call, not after.** `CeilingTransport` sits
+*inside* the recording wrapper, so a refused call is a call that did not happen
+and therefore has no entry -- rather than an entry describing a call nobody
+made. Composition is `Recording(Ceiling(Live))`, and the order carries that
+meaning.
+
+**Replay never imports the SDK.** `LiveTransport` defers `import anthropic`
+into its constructor. A replay run -- the default mode -- neither imports the
+SDK nor reads a credential, so "runs with no API key and no spend" is a
+property of the import graph and not of a branch somebody has to take.
+`test_the_replay_path_does_not_import_the_sdk` asserts it.
+
+**Our backoff REPLACES the SDK's, and does not wrap it.** The specification
+requires this posture to be stated, and the reason it requires it is arithmetic:
+the SDK retries 408/409/429/5xx and connection errors twice by default, and a
+full live design-set run is on the order of a thousand judged calls each
+carrying a whole transcript. Two retry mechanisms layered by accident multiply
+the wall-clock cost of every failure and make `transport_attempts` in the run
+log a number that describes one of the two. So `LiveTransport` constructs the
+client with `max_retries=0` and owns the loop. One mechanism, one count, one
+declared maximum.
+
+**A credential never reaches a log or an error message.** `scrub_credentials`
+is the named function that removes it, and every write and every refusal in this
+module goes through it. It is named rather than inlined precisely so a control
+can drive the shipped function instead of re-implementing the rule beside it --
+which is the shape D121 found in six controls, every one of them measuring
+nothing.
+
+**Authenticating and scrubbing read different populations, and conflating them
+left a real key in reach of a log.** `credential_environment` resolves which
+key to authenticate with -- an exported variable beats a `.env` one of the same
+name -- so the loser is not in what it returns. `credential_values` keeps both,
+and is what the scrubber reads.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import time
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, replace
+from pathlib import Path
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Final, Protocol
+
+if TYPE_CHECKING:  # pragma: no cover - imported for annotations only
+    import anthropic
+
+#: Environment variables that may hold a credential. Scrubbing reads all of
+#: them rather than the one the live path happens to use: a key exported under
+#: the SDK's alternative name is the same secret, and a scrubber that knew
+#: about one of the two would be a guard with a hole shaped like an env var.
+CREDENTIAL_VARIABLES: Final[tuple[str, ...]] = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+)
+
+#: What replaces a credential value. A fixed token rather than a deletion, so a
+#: reader of a scrubbed log can tell "a secret was here and was removed" from
+#: "nothing was here" -- a distinction the run log exists to preserve
+#: everywhere else, and there is no reason to drop it for this one field.
+REDACTION: Final[str] = "[redacted-credential]"
+
+#: Below this length a value is not treated as a credential even when an
+#: environment variable holds it. An empty or one-character `ANTHROPIC_API_KEY`
+#: would otherwise turn every character of every prompt into the redaction
+#: token, destroying the log in the name of protecting it. Fails toward
+#: readable output only for values too short to be a real key.
+MINIMUM_CREDENTIAL_LENGTH: Final[int] = 8
+
+#: The per-request client timeout, in seconds. Declared rather than inherited:
+#: the SDK's default is ten minutes, which is not a timeout so much as an
+#: absence of one, and a judged run of a thousand calls cannot afford to
+#: discover a hung request ten minutes at a time.
+REQUEST_TIMEOUT_SECONDS: Final[float] = 120.0
+
+#: `max_tokens` at or above which a request is streamed. The non-streaming path
+#: has to hold one HTTP response open for the whole generation, so a large
+#: ceiling risks the timeout above; streaming removes that coupling. The
+#: specification requires streaming for exactly this case and leaves the
+#: threshold to the build.
+STREAMING_THRESHOLD_TOKENS: Final[int] = 8192
+
+#: How many times a transient transport failure is retried before the run
+#: gives up on that call, and the delay schedule. Declared, because "retry
+#: with exponential backoff to a declared maximum" is the requirement and an
+#: undeclared maximum is an unbounded one.
+MAX_TRANSPORT_ATTEMPTS: Final[int] = 7
+BACKOFF_BASE_SECONDS: Final[float] = 1.0
+BACKOFF_CEILING_SECONDS: Final[float] = 30.0
+
+#: The shortest total the backoff schedule may add up to, in seconds.
+#:
+#: **The attempt count is not the quantity that matters, and declaring only the
+#: count hid that** (D145). Four attempts on this schedule is a retry window of
+#: 1 + 2 + 4 = **seven seconds**, and what it was guarding is a live recording
+#: that takes over an hour and costs about fourteen dollars. A single
+#: `overloaded_error` -- a 529, which `_is_transient` correctly classifies as
+#: retryable -- outlasted seven seconds on 2026-09-11 and took the run with it,
+#: at call 575 of roughly 1,040, with every one of those 575 having succeeded on
+#: its first attempt.
+#:
+#: So the declared bound is the **window**, and the attempt count is whatever
+#: delivers it. Sixty seconds is chosen rather than fitted: it is an order of
+#: magnitude above the schedule that failed and two orders below what it
+#: protects, and the cost when it does not help is a minute against an hour.
+#: `test_the_retry_window_outlasts_a_transient_overload` fails if the schedule
+#: stops adding up to it, which is what makes this a bound rather than a
+#: remembered number.
+MIN_RETRY_WINDOW_SECONDS: Final[float] = 60.0
+
+#: What the SDK's own retry count is set to. **Zero, and that is the posture
+#: the specification requires this project to state**: our backoff REPLACES the
+#: SDK's rather than wrapping it. The SDK defaults to 2, so leaving this alone
+#: would layer two mechanisms -- multiplying the wall-clock cost of every
+#: failure across a run of a thousand calls, and making `transport_attempts` in
+#: the run log a number that describes one of the two.
+#:
+#: A named constant because the statement was prose until 2026-09-09 and prose
+#: is not gradeable. `test_the_sdk_retry_count_is_zero_so_our_backoff_replaces_
+#: it` reads what the client is actually constructed with, not what a comment
+#: claims.
+SDK_RETRIES: Final[int] = 0
+
+#: The call ceiling a live run applies when `--max-calls` is not supplied.
+#: Declared rather than absent, because the requirement's alternative to a
+#: default is running uncapped -- and a judged run's call count is the product
+#: of three numbers (calls x dimensions x N) that nobody holds in their head.
+#: It covers one full pass of the shipped judged tier over the design set with
+#: room for an informed retry on every call, and stops a typo in `repetitions`
+#: from becoming a bill. The estimate-and-confirm prompt is the real gate; this
+#: is the net under it.
+#:
+#: **The number is asserted against the shipped configuration rather than
+#: reasoned about**, by `test_the_default_ceiling_covers_the_shipped_judged_run`.
+#: It was 200 through P3, sized to "one full pass of the shipped judged entry"
+#: when the rubric held one -- and the rubric grew to seven at P4, which made
+#: the default a value that refused the run it was written to permit. A number
+#: whose justification is prose beside it goes stale silently the moment the
+#: thing it describes changes; a number a test compares against that thing
+#: turns the suite red instead.
+#:
+#: **It counts logical sends, not HTTP requests**, and the difference is worth
+#: stating where the number is. `CeilingTransport` wraps `LiveTransport`, whose
+#: `send` issues up to `MAX_TRANSPORT_ATTEMPTS` requests on a transient
+#: failure, so a ceiling of 200 bounds 200 calls and up to 1,400 requests --
+#: the multiplier being the attempt count, which moved at D145 -- and
+#: a request that timed out after the server processed it is billed and not
+#: counted. Bounding requests instead would make the ceiling a limit on how bad
+#: the network is allowed to be, which is not the quantity an operator is
+#: agreeing to.
+DEFAULT_CALL_CEILING: Final[int] = 2400
+
+#: The models this project will issue a call against. The specification's rule
+#: is that an unsupported model is refused **by name** rather than by sending a
+#: request that returns 400 -- a refusal a reader can act on, rather than a
+#: provider error they have to interpret.
+SUPPORTED_MODELS: Final[tuple[str, ...]] = ("claude-sonnet-5", "claude-opus-5")
+
+#: The effort levels the current models accept. Declared so a rubric entry
+#: naming `medium-high` is refused at load with the list beside it, rather than
+#: returning a 400 from a request that had already been assembled. `effort`
+#: lives inside `output_config` and not at the top level, which is the shape
+#: this project verified against the SDK rather than recalled.
+EFFORT_LEVELS: Final[tuple[str, ...]] = ("low", "medium", "high", "xhigh", "max")
+
+#: Price per million tokens: (model, input rate, output rate). A cost estimate
+#: is a number a human reads before agreeing to spend, so it is data rather
+#: than a literal at the print site -- and it is dated, because a price is a
+#: claim about the world that this file cannot verify. Rates as published for
+#: the first-party API on 2026-09-09.
+#:
+#: A tuple of triples rather than a mapping, because a `Final` mapping is not
+#: immutable and this project has a guard that says so:
+#: `test_every_final_constant_holds_a_value_that_cannot_be_mutated` flagged the
+#: first draft, which was a `MappingProxyType` -- a read-only *view*, whose
+#: backing dict is mutable by anyone holding a reference to it. Nothing held
+#: one here, which is exactly the "effectively immutable" this tree does not
+#: accept as an answer.
+PRICING_USD_PER_MTOK: Final[tuple[tuple[str, float, float], ...]] = (
+    ("claude-sonnet-5", 2.00, 10.00),
+    ("claude-opus-5", 5.00, 25.00),
+)
+
+#: Stop reasons this project reasons about by name. The set is open at the API
+#: and closed here only in the sense that these three have handling; anything
+#: else is recorded and treated as a response to be validated, which is what
+#: `end_turn` gets.
+STOP_REFUSAL: Final[str] = "refusal"
+STOP_MAX_TOKENS: Final[str] = "max_tokens"
+STOP_END_TURN: Final[str] = "end_turn"
+
+
+class TransportError(Exception):
+    """Base for every refusal or failure at the seam."""
+
+
+class TransientTransportError(TransportError):
+    """A failure worth retrying: a connection error, a 429, a 5xx.
+
+    Separate from the base because the backoff loop's decision is exactly this
+    distinction, and a loop that retried everything would spend its whole
+    window discovering that a 400 is still a 400.
+    """
+
+
+class CredentialMissingError(TransportError):
+    """`--mode live` with no credential in the environment.
+
+    Names the variables it looked at and **never** what it found in them.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "live mode requires a credential and none is set. Export one of "
+            f"{', '.join(CREDENTIAL_VARIABLES)}, or put it in an uncommitted "
+            f"{DOTENV_FILENAME} in the repository root, or run in replay mode, which is "
+            "the default and spends nothing."
+        )
+
+
+class UnsupportedModelError(TransportError):
+    """A model outside the declared set, refused before a call is issued."""
+
+    def __init__(self, model: str) -> None:
+        super().__init__(
+            f"model {model!r} is not in this project's supported set "
+            f"({', '.join(SUPPORTED_MODELS)}). Refused by name rather than by issuing a "
+            "request whose parameters this project cannot vouch for."
+        )
+        self.model = model
+
+
+class UnpricedModelError(TransportError):
+    """A cost estimate was asked for a model with no published rate here.
+
+    Raised rather than estimated at zero, and the first draft of this module
+    did estimate at zero -- `PRICING_USD_PER_MTOK.get(model, (0.0, 0.0))`. That
+    is a fail-open in the one place this project puts a human gate: the
+    estimate exists so somebody can agree to the spend before it happens, and a
+    run that reports `$0.00` because nobody added a price is a run they will
+    agree to without reading. The number's whole job is to be wrong loudly
+    rather than reassuringly.
+    """
+
+    def __init__(self, model: str) -> None:
+        super().__init__(
+            f"no published rate for model {model!r}, so this run cannot be costed. "
+            f"Priced models: {', '.join(name for name, _, _ in PRICING_USD_PER_MTOK)}. "
+            "Refusing rather than estimating zero -- an estimate of nothing is the one a "
+            "reader approves without looking."
+        )
+        self.model = model
+
+
+class CallCeilingReachedError(TransportError):
+    """The run has issued as many calls as it was allowed to.
+
+    Raised *before* the call, so the ceiling is a number of calls issued rather
+    than a number of calls issued plus one.
+    """
+
+    def __init__(self, ceiling: int) -> None:
+        super().__init__(
+            f"the run has issued {ceiling} call(s), which is its configured ceiling. "
+            "Halting without issuing a further call. Raise --max-calls to continue, "
+            "having decided what that costs."
+        )
+        self.ceiling = ceiling
+
+
+class ReplayCacheMissError(TransportError):
+    """Replay was asked for a request the log does not hold.
+
+    Reports the hash, because the hash is what a reader greps the log for. Does
+    **not** fall back to a live call: a replay run that quietly went to the
+    network would spend money the mode exists to guarantee it does not, and
+    would do it at precisely the moment the log stopped describing the run.
+    """
+
+    def __init__(self, request_hash: str, repetition: int) -> None:
+        super().__init__(
+            f"replay: no run-log entry for request hash {request_hash} repetition "
+            f"{repetition}. Replay issues no live call on a miss -- record a log with "
+            "--mode live, or point --run-log at one that covers this rubric."
+        )
+        self.request_hash = request_hash
+        self.repetition = repetition
+
+
+class RunLogFormatError(TransportError):
+    """A run log whose structure cannot be read, which is none of the others.
+
+    Three failures present as "this log is no use" and this project's whole
+    thesis is that they must not be reported as one. A **cache miss** is a
+    well-formed log that does not hold this request. **Staleness** is a
+    well-formed log recorded against a different rubric or template. This is
+    the third: a log that does not describe itself -- a call record naming a
+    blob the log does not carry, or a blob whose stored content does not hash
+    to the identifier it was filed under.
+
+    The distinction is not academic. A miss says *record more*; staleness says
+    *re-record*; this says *the file is damaged*, and re-recording on that
+    advice would spend money to fix a truncation.
+    """
+
+
+class StaleReplayLogError(TransportError):
+    """The log was recorded against a different rubric or prompt template.
+
+    D8's caveat, made enforceable: a committed run log goes stale the moment a
+    prompt template or a rubric entry changes, and a fossil that quietly
+    disagrees with live behavior is worse than no log at all. Two values are
+    compared because they come from two places -- the rubric's own version
+    string, and a hash of the prompt template that renders it.
+    """
+
+    def __init__(self, differences: Sequence[str]) -> None:
+        super().__init__(
+            "replay refused: the run log was recorded against a different state:\n  "
+            + "\n  ".join(differences)
+            + "\nRe-record it, or pass --allow-stale-replay having decided that the "
+            "difference does not matter for what you are doing."
+        )
+        self.differences = tuple(differences)
+
+
+class ResumeRefusedError(TransportError):
+    """A run log a resumed run cannot be assembled from (D153).
+
+    A resumed log keeps `mode: live` because every call in it was issued against
+    the API, and that is only true if the log it resumes was live as well. A
+    replay log's answers were served rather than issued, so carrying them into a
+    live log would make its header claim calls no session made.
+    """
+
+
+#: The uncommitted file a credential may live in. The specification's `tools &
+#: permissions` says credentials are read "from the environment or an
+#: uncommitted `.env`", and only the environment half existed until the first
+#: live run needed the other: it is the route by which an operator supplies a
+#: key without it passing through anything that logs.
+#:
+#: `.gitignore` covers it from the first commit and a fail-closed pre-commit
+#: guard blocks a populated one over 20 bytes, so this reads a file two
+#: independent mechanisms already keep out of history.
+DOTENV_FILENAME: Final[str] = ".env"
+
+#: Parsed `.env` values, keyed by the file's resolved path. Cached because
+#: `scrub_credentials` runs on every field of every run-log entry, and a file
+#: read per field would make the guard expensive enough to be tempting to skip.
+#: The consequence is stated rather than hidden: a `.env` written *during* a run
+#: is not picked up, which is the right trade for a CLI that reads its
+#: credentials once at the start.
+_DOTENV_CACHE: dict[Path, Mapping[str, str]] = {}
+
+
+def read_dotenv(path: Path) -> Mapping[str, str]:
+    """The credential variables an uncommitted `.env` declares, and no others.
+
+    **Only the declared credential names are read.** A `.env` loader that
+    imported every key it found would be a configuration mechanism nobody asked
+    for, and it would widen what the scrubber has to reason about to whatever
+    an operator happened to put in the file. Two names in, two names out.
+
+    Tolerant of the shapes a hand-edited file takes -- blank lines, `#`
+    comments, `export ` prefixes, and quotes around the value -- because the
+    alternative to tolerating them is an operator whose key is silently not
+    found, which presents as "live mode says I have no credential" with a file
+    sitting right there that plainly does.
+    """
+    resolved = path.resolve()
+    cached = _DOTENV_CACHE.get(resolved)
+    if cached is not None:
+        return cached
+
+    found: dict[str, str] = {}
+    if path.is_file():
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, _, value = line.partition("=")
+            name = name.strip().removeprefix("export ").strip()
+            if name not in CREDENTIAL_VARIABLES:
+                continue
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            if value:
+                found[name] = value
+    frozen = MappingProxyType(found)
+    _DOTENV_CACHE[resolved] = frozen
+    return frozen
+
+
+def credential_environment(
+    root: Path | None = None, environ: Mapping[str, str] | None = None
+) -> Mapping[str, str]:
+    """The process environment, with an uncommitted `.env` filling the gaps.
+
+    **The exported variable wins.** A key in the environment was put there for
+    this invocation; a key in a file was put there once and may be a leftover.
+    When the two disagree, the more deliberate one is the one to believe.
+
+    **What this mapping is NOT is the scrubber's input**, and it used to say it
+    was. Resolving the contest is the whole job here, so the loser is not in the
+    result -- and a scrubber reading this mapping would leave a real key in the
+    log whenever an exported variable overrode a `.env` one of the same name.
+    `credential_values` below is what the scrubber reads, and it keeps both.
+
+    **`os.environ` is never mutated.** A loader that exported the value would
+    put it in the environment of every subprocess this process starts, which is
+    a wider blast radius than the one thing that needs it.
+    """
+    env = dict(os.environ if environ is None else environ)
+    base = root if root is not None else Path.cwd()
+    for name, value in read_dotenv(base / DOTENV_FILENAME).items():
+        env.setdefault(name, value)
+    return MappingProxyType(env)
+
+
+def resolve_credential(
+    root: Path | None = None, environ: Mapping[str, str] | None = None
+) -> tuple[str, str]:
+    """The declared variable a live run will authenticate with, and its value.
+
+    **The named function "a live run SHALL require a credential" is bought
+    with.** It lived inside `LiveTransport.__init__` until 2026-09-09, which
+    made it unaskable without building a transport -- and the CLI builds one
+    only after it has printed an estimate and taken a confirmation. So an
+    operator with no key was asked to approve spend they could not make, and
+    the only test naming `CredentialMissingError` constructed the exception and
+    read its message. Removing the refusal left the whole judged-tier suite
+    green.
+
+    Raises rather than returning empty, so a caller cannot proceed on a falsy
+    value it forgot to test. The SDK constructs happily with `api_key=""` and
+    refuses one request later, at the provider, which is a refusal about the
+    account rather than about the harness.
+    """
+    env = credential_environment(root, environ)
+    for name in CREDENTIAL_VARIABLES:
+        if env.get(name, "").strip():
+            return name, env[name]
+    raise CredentialMissingError()
+
+
+def credential_values(
+    root: Path | None = None, environ: Mapping[str, str] | None = None
+) -> tuple[str, ...]:
+    """Every credential value in reach, environment and file, longest first.
+
+    **The scrubber's population, and deliberately not `credential_environment`'s.**
+    Authentication needs one value per name and a rule for which wins; scrubbing
+    needs every value either source holds, **including the one authentication
+    discarded**. A leftover key in `.env` that an exported variable overrode is
+    still a secret, and the mapping that resolved that contest has only the
+    winner in it.
+
+    Longest first, so a value that contains another is redacted before the
+    shorter one turns the longer into a partial match with a live tail.
+    """
+    environment = os.environ if environ is None else environ
+    base = root if root is not None else Path.cwd()
+    from_file = read_dotenv(base / DOTENV_FILENAME)
+    seen: list[str] = []
+    for name in CREDENTIAL_VARIABLES:
+        for value in (environment.get(name, ""), from_file.get(name, "")):
+            if value and value not in seen:
+                seen.append(value)
+    return tuple(sorted(seen, key=len, reverse=True))
+
+
+def client_options() -> dict[str, Any]:
+    """The client configuration this project declares rather than inherits.
+
+    A named function so a test can read what `LiveTransport` will be built
+    with, rather than a comment claiming it. Both values are posture the
+    specification requires to be visible: an explicit per-request timeout
+    instead of the SDK's ten-minute default, and `max_retries` at zero because
+    our backoff replaces the SDK's rather than wrapping it.
+    """
+    return {"timeout": REQUEST_TIMEOUT_SECONDS, "max_retries": SDK_RETRIES}
+
+
+def backoff_delay(attempt: int) -> float:
+    """Seconds to wait before attempt `attempt + 1`, on the declared schedule.
+
+    Exponential from a declared base, capped at a declared ceiling. Extracted
+    from the retry loop so the schedule is assertable **without a test that
+    waits**: the loop's own sleeps are driven through an injected function, and
+    what they are asked to sleep for is this.
+
+    The cap is the half worth naming. Without it the fourth attempt on a longer
+    schedule would wait minutes, which on a run of a thousand calls is the
+    difference between a slow failure and a hung one.
+    """
+    # `2 ** n` is typed as returning Any for a possibly-negative exponent, so
+    # the growth is written as a float multiplication that mypy can follow.
+    growth = BACKOFF_BASE_SECONDS * float(2 ** max(attempt - 1, 0))
+    return min(growth, BACKOFF_CEILING_SECONDS)
+
+
+def scrub_credentials(text: str, credentials: Sequence[str] | None = None) -> str:
+    """Remove every credential value in `credentials` from `text`.
+
+    **The named function the requirement is bought with.** "The system SHALL
+    exclude credential values from every log, report, error message and run-log
+    entry" is not a property of a careful author; it is a property of every
+    string in this module passing through here on its way out.
+
+    Takes **values** rather than an environment, and the distinction is the
+    defect it was changed for: an environment mapping answers "which key do I
+    authenticate with", which has one answer per name, and scrubbing needs
+    every value either source held. Defaults to `credential_values()` so a
+    call site cannot forget to pass one -- but a caller that knows which
+    environment it authenticated from should pass its own, because the default
+    resolves `.env` against the *working directory* rather than the root the
+    CLI chose.
+
+    Values shorter than `MINIMUM_CREDENTIAL_LENGTH` are ignored -- an empty
+    variable would otherwise match between every pair of characters and redact
+    the entire log.
+    """
+    values = credential_values() if credentials is None else credentials
+    scrubbed = text
+    for value in values:
+        if len(value) >= MINIMUM_CREDENTIAL_LENGTH:
+            scrubbed = scrubbed.replace(value, REDACTION)
+    return scrubbed
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationConfig:
+    """What the request declares about how the model should answer.
+
+    Every field is rubric data. D24 is why `max_tokens` is here rather than
+    defaulted at the call site: it is a **required** Messages API parameter, so
+    a missing value is an unissuable request rather than a defaulting question,
+    and these prompts carry a whole transcript plus a tagged fact population.
+
+    Sampling parameters are absent and that is deliberate rather than
+    incomplete. `temperature`, `top_p` and `top_k` are removed on both models
+    this project uses and return a 400 -- an API fact, not a project
+    convention. Determinism for the judged tier comes from replay.
+    """
+
+    model: str
+    max_tokens: int
+    effort: str
+
+    def as_dict(self) -> dict[str, Any]:
+        """The shape the run log records. Named `generation_config` there,
+        because that is what the requirement calls it."""
+        return {"model": self.model, "max_tokens": self.max_tokens, "effort": self.effort}
+
+    @property
+    def should_stream(self) -> bool:
+        """Whether this request has to stream to survive its own timeout."""
+        return self.max_tokens >= STREAMING_THRESHOLD_TOKENS
+
+
+@dataclass(frozen=True, slots=True)
+class JudgeRequest:
+    """One judged call, exactly as it will go on the wire.
+
+    `request_hash` addresses the replay lookup and covers **only** what the
+    model sees: the system prompt, the rendered prompt, the declared schema and
+    the generation config. It does not cover the entry id, the call id or the
+    repetition index -- those identify the request in the run rather than
+    determine the response, and folding them in would make a hash that changes
+    when nothing about the request did.
+
+    The repetition index is carried alongside instead, and replay keys on the
+    pair. N repetitions of one dimension send N byte-identical requests by
+    design (D17: the whole point is to observe evaluator variance over a fixed
+    input), so the hash alone cannot tell them apart and a lookup keyed on it
+    alone would return the first one N times -- reporting a flat distribution
+    from a log that recorded a varied one.
+    """
+
+    entry_id: str
+    call_id: str
+    repetition: int
+    retry_index: int
+    """0 for the first attempt at this (entry, call, repetition); 1 for the
+    informed retry. Distinct from `repetition`, and distinct again from the
+    transport attempts inside one call -- three counters that a single "retry
+    count" would collapse into a number describing one of them."""
+
+    system: str
+    prompt: str
+    schema: Mapping[str, Any]
+    config: GenerationConfig
+
+    @property
+    def request_hash(self) -> str:
+        """A content hash of the wire request. Stable across machines and runs.
+
+        `sort_keys` and `ensure_ascii` are not decoration: an unsorted dict and
+        a locale-dependent encoding are two of the classic ways a "content
+        hash" comes out different for identical content, and this hash is what
+        a committed reference log is addressed by.
+        """
+        payload = json.dumps(
+            {
+                "system": self.system,
+                "prompt": self.prompt,
+                "schema": self.schema,
+                "config": self.config.as_dict(),
+            },
+            sort_keys=True,
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class JudgeResponse:
+    """What came back, before anything has been made of it.
+
+    `stop_reason` is recorded unconditionally (D23, D24). It is the field that
+    separates three outcomes a harness must never conflate: a model that
+    declined (`refusal`), a response cut off mid-structure (`max_tokens`), and
+    a complete response that fails schema or citation validation (`end_turn`).
+    All three otherwise present as "the judge did not produce a valid result",
+    which is one status covering three findings.
+
+    `stop_category` and `stop_explanation` are populated only on a refusal --
+    the API sends `stop_details` for that stop reason and null for every other,
+    so reading them unguarded is a crash waiting for the first refusal.
+    """
+
+    text: str
+    stop_reason: str
+    stop_category: str | None
+    stop_explanation: str | None
+    input_tokens: int
+    output_tokens: int
+    model: str
+    latency_ms: int
+    transport_attempts: int = 1
+    """How many times the transport issued this one logical call before it
+    returned. 1 when nothing went wrong. Named for what it counts, so it cannot
+    be read as the informed-retry counter."""
+
+    @property
+    def refused(self) -> bool:
+        return self.stop_reason == STOP_REFUSAL
+
+    @property
+    def truncated(self) -> bool:
+        return self.stop_reason == STOP_MAX_TOKENS
+
+
+class Transport(Protocol):
+    """Send one judged request, get one response.
+
+    Deliberately narrow. A transport does not know about rubric entries,
+    retries on invalid citations, or statuses -- those are the engine's, and a
+    seam that knew about them would be a seam the replay implementation had to
+    reimplement.
+    """
+
+    def send(self, request: JudgeRequest) -> JudgeResponse: ...
+
+
+class CeilingTransport:
+    """Counts issued calls and refuses past the ceiling.
+
+    Wraps rather than being folded into `LiveTransport`, so the count is
+    assertable against a spy with no live path in the test at all -- which is
+    what the criterion asks for ("asserted by a transport spy counting calls").
+
+    The refusal happens **before** delegating. A ceiling checked afterwards is
+    a ceiling of N+1, and the requirement is that the run halts "without
+    issuing a further call".
+    """
+
+    def __init__(self, inner: Transport, ceiling: int) -> None:
+        self._inner: Final[Transport] = inner
+        self._ceiling: Final[int] = ceiling
+        self._issued = 0
+
+    @property
+    def issued(self) -> int:
+        return self._issued
+
+    def send(self, request: JudgeRequest) -> JudgeResponse:
+        if self._issued >= self._ceiling:
+            raise CallCeilingReachedError(self._ceiling)
+        self._issued += 1
+        return self._inner.send(request)
+
+
+class RecordingTransport:
+    """Writes a run-log entry for every call that returns.
+
+    The wrapper *is* the requirement. "The system SHALL record, for every
+    judged call, the exact prompt sent, the raw response received, the model
+    identifier, the generation configuration, the retry count, timings and
+    token counts" is satisfied by there being one code path, not by every
+    caller remembering.
+
+    A call that raises writes nothing, and that is correct in both directions:
+    a ceiling refusal is a call that never happened, and a transport failure
+    that exhausted its attempts produced no response to record. What the engine
+    does with the exception -- persist what it already has, then abort -- is
+    the engine's, and it is specified there.
+    """
+
+    def __init__(self, inner: Transport, writer: RunLogWriter) -> None:
+        self._inner: Final[Transport] = inner
+        self._writer: Final[RunLogWriter] = writer
+
+    def send(self, request: JudgeRequest) -> JudgeResponse:
+        response = self._inner.send(request)
+        self._writer.record(request, response)
+        return response
+
+
+class ReplayTransport:
+    """Serves responses from a previously recorded run log, and never a call.
+
+    Construct it with `load_run_log`, which is where the staleness comparison
+    lives. On a miss it raises rather than falling through to anything: the
+    mode's entire promise is that it spends nothing, and a fallback would break
+    that promise exactly when the log stopped covering the run.
+    """
+
+    def __init__(self, entries: Mapping[tuple[str, int], RunLogEntry]) -> None:
+        self._entries: Final[Mapping[tuple[str, int], RunLogEntry]] = MappingProxyType(
+            dict(entries)
+        )
+
+    def send(self, request: JudgeRequest) -> JudgeResponse:
+        key = (request.request_hash, request.repetition)
+        entry = self._entries.get(key)
+        if entry is None:
+            raise ReplayCacheMissError(request.request_hash, request.repetition)
+        return entry.response
+
+
+class ResumingTransport:
+    """Serves what an earlier live session recorded, and issues only what it lacks (D153).
+
+    On a hit it returns the recorded response and issues nothing; on a miss it
+    hands the request to `live`. The call ceiling belongs around `live` and not
+    around this: a served answer is not a call, and a ceiling counting served
+    answers would halt a resumed run before it issued the calls it came to finish.
+    """
+
+    def __init__(self, recorded: Mapping[tuple[str, int], RunLogEntry], live: Transport) -> None:
+        self._recorded: Final[Mapping[tuple[str, int], RunLogEntry]] = MappingProxyType(
+            dict(recorded)
+        )
+        self._live: Final[Transport] = live
+        self._served = 0
+
+    @property
+    def served(self) -> int:
+        """Answers returned from the resumed log rather than issued."""
+        return self._served
+
+    def send(self, request: JudgeRequest) -> JudgeResponse:
+        entry = self._recorded.get((request.request_hash, request.repetition))
+        if entry is None:
+            return self._live.send(request)
+        self._served += 1
+        return entry.response
+
+
+class LiveTransport:
+    """The Anthropic Messages API, with this project's declared posture.
+
+    Four things are stated rather than inherited, and each is a decision the
+    specification requires to be visible:
+
+    * **an explicit per-request timeout**, because the SDK's default of ten
+      minutes is not a timeout a batch of a thousand calls can afford;
+    * **`max_retries=0`**, because our backoff **replaces** the SDK's rather
+      than wrapping it -- two layered mechanisms multiply the wall-clock cost
+      of every failure and make the recorded attempt count ambiguous;
+    * **streaming above a declared `max_tokens`**, because a large ceiling on a
+      non-streaming request is how a run discovers the timeout;
+    * **no sampling parameters**, because they are removed on both models this
+      project uses and return a 400.
+
+    The SDK import is deferred into this constructor. Replay is the default
+    mode and must run on a clone with no credential and no SDK concerns at all,
+    and an import at module scope would make that a claim rather than a fact.
+    """
+
+    def __init__(
+        self,
+        *,
+        environ: Mapping[str, str] | None = None,
+        root: Path | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        """`root` is where an uncommitted `.env` is looked for.
+
+        Passed by the CLI rather than defaulted to the working directory: an
+        operator running `harness` from a subdirectory of their checkout would
+        otherwise be told they have no credential while the file sits one level
+        up, which is the confusing half of a feature meant to remove friction.
+        """
+        variable, credential = resolve_credential(root, environ)
+
+        # Kept, and this is the fix for a guard that was pointing at the wrong
+        # directory. `scrub_credentials` defaults to reading `.env` from the
+        # WORKING directory; the CLI resolves `root` from the checkout, so an
+        # operator running `harness` from a subdirectory had a transport
+        # authenticating with a key its own error messages could not see.
+        self._credentials: Final[tuple[str, ...]] = credential_values(root, environ)
+
+        # Deferred by design; see the class docstring. Replay must not import
+        # this, and an import at module scope would make that a claim rather
+        # than a fact. `TYPE_CHECKING` above imports it for the type checker
+        # only, so the client below is checked against the real SDK signatures
+        # while the runtime import stays inside this constructor.
+        import anthropic
+
+        # Passed explicitly rather than left to the SDK's own environment
+        # lookup: a credential that came from `.env` is deliberately NOT in
+        # `os.environ` -- exporting it would put it in the environment of every
+        # subprocess this process starts -- so the client would not find it.
+        self._sleep: Final[Callable[[float], None]] = sleep
+        # Routed by the variable it came from, because the SDK sends the two
+        # under different headers: `api_key` as `X-Api-Key` and `auth_token` as
+        # `Authorization: Bearer`. Passing a bearer token as `api_key` -- which
+        # is what this did until 2026-09-09 -- sends it under the wrong header
+        # and authenticates nothing, while `.env.example` offers that variable
+        # as an alternative. A documented route that cannot work is worse than
+        # one that is not documented.
+        #
+        # Written as two calls rather than one with a `**kwargs` table, because
+        # a splat is invisible to the type checker -- and a mistyped argument
+        # name is exactly the defect this is here to prevent.
+        if variable == "ANTHROPIC_AUTH_TOKEN":
+            client = anthropic.Anthropic(auth_token=credential, **client_options())
+        else:
+            client = anthropic.Anthropic(api_key=credential, **client_options())
+        self._client: Final[anthropic.Anthropic] = client
+        # Captured as types rather than reached through a stored module
+        # reference, so `_is_transient` is checkable. A stored module would be
+        # `Any`, and every attribute read off it would stop being checked --
+        # in the one method whose whole job is telling two exception families
+        # apart.
+        self._retry_on: Final[tuple[type[BaseException], ...]] = (
+            anthropic.APIConnectionError,
+            anthropic.APITimeoutError,
+        )
+        self._status_error: Final[type[anthropic.APIStatusError]] = anthropic.APIStatusError
+
+    def _is_transient(self, exc: Exception) -> bool:
+        """Whether the backoff loop should try again.
+
+        Connection errors, 408, 409, 429 and 5xx are transient; a 400 is the
+        request being wrong, and retrying it reaches the same place a minute
+        later. **529 is inside `status >= 500` and always was** -- the run
+        that D145 records was lost to an `overloaded_error` that this method
+        classified correctly and the schedule then failed to outlast.
+        """
+        if isinstance(exc, self._retry_on):
+            return True
+        if isinstance(exc, self._status_error):
+            status = exc.status_code
+            return status in (408, 409, 429) or status >= 500
+        return False
+
+    def send(self, request: JudgeRequest) -> JudgeResponse:
+        if request.config.model not in SUPPORTED_MODELS:
+            raise UnsupportedModelError(request.config.model)
+
+        last: Exception | None = None
+        for attempt in range(1, MAX_TRANSPORT_ATTEMPTS + 1):
+            started = time.monotonic()
+            try:
+                message = self._issue(request)
+            except Exception as exc:
+                if not self._is_transient(exc):
+                    raise TransportError(
+                        scrub_credentials(f"{type(exc).__name__}: {exc}", self._credentials)
+                    ) from exc
+                last = exc
+                # No sleep after the final attempt: the loop is about to give
+                # up, and waiting first spends wall-clock to reach the same
+                # place. On a run of a thousand calls that is the difference
+                # between a slow failure and a hung one.
+                if attempt < MAX_TRANSPORT_ATTEMPTS:
+                    self._sleep(backoff_delay(attempt))
+                continue
+            latency_ms = int((time.monotonic() - started) * 1000)
+            return _response_from_message(message, latency_ms=latency_ms, attempts=attempt)
+
+        raise TransientTransportError(
+            scrub_credentials(
+                f"the transport failed {MAX_TRANSPORT_ATTEMPTS} time(s) on entry "
+                f"{request.entry_id!r} call {request.call_id!r}: "
+                f"{type(last).__name__ if last else 'unknown'}: {last}",
+                self._credentials,
+            )
+        )
+
+    def _issue(self, request: JudgeRequest) -> Any:
+        """One attempt. Streams when the declared ceiling makes it necessary."""
+        params: dict[str, Any] = {
+            "model": request.config.model,
+            "max_tokens": request.config.max_tokens,
+            "system": request.system,
+            "messages": [{"role": "user", "content": request.prompt}],
+            "thinking": {"type": "adaptive"},
+            "output_config": {
+                "effort": request.config.effort,
+                "format": {"type": "json_schema", "schema": dict(request.schema)},
+            },
+        }
+        if request.config.should_stream:
+            with self._client.messages.stream(**params) as stream:
+                return stream.get_final_message()
+        return self._client.messages.create(**params)
+
+
+def _response_from_message(message: Any, *, latency_ms: int, attempts: int) -> JudgeResponse:
+    """One SDK message as this project's response type.
+
+    `stop_details` is read **only** on a refusal. The API populates it for that
+    stop reason and sends null for every other, so an unguarded read is a
+    crash waiting for the first declined request -- on a corpus that seeds
+    prompt injection by design (D7), which is to say soon.
+    """
+    stop_reason = str(getattr(message, "stop_reason", "") or "")
+    category: str | None = None
+    explanation: str | None = None
+    details = getattr(message, "stop_details", None)
+    if stop_reason == STOP_REFUSAL and details is not None:
+        raw_category = getattr(details, "category", None)
+        raw_explanation = getattr(details, "explanation", None)
+        category = None if raw_category is None else str(raw_category)
+        explanation = None if raw_explanation is None else str(raw_explanation)
+
+    text = "".join(
+        block.text for block in message.content if getattr(block, "type", None) == "text"
+    )
+    usage = message.usage
+    return JudgeResponse(
+        text=text,
+        stop_reason=stop_reason,
+        stop_category=category,
+        stop_explanation=explanation,
+        input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
+        output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+        model=str(getattr(message, "model", "")),
+        latency_ms=latency_ms,
+        transport_attempts=attempts,
+    )
+
+
+#: The request fields stored once and referenced by content hash rather than
+#: repeated on every call record. Named here rather than spelled out at three
+#: call sites, so the writer, the reader and the round-trip test cannot come to
+#: hold three different ideas of which fields are referenced.
+BLOB_FIELDS: Final[tuple[str, ...]] = ("system", "prompt", "schema")
+
+
+def blob_hash(content: Any) -> str:
+    """A content hash of one stored field, over its canonical JSON.
+
+    Deliberately **not** `JudgeRequest.request_hash`, which addresses a whole
+    request and is what replay keys on. This addresses one field of one
+    request, and the two are separate so that a change to what a log stores
+    cannot move the identifier a committed log is looked up by -- which is the
+    property that makes D128 a storage change rather than a re-recording.
+
+    `sort_keys` and `ensure_ascii` for the reason `request_hash` gives: an
+    unsorted mapping and a locale-dependent encoding are the two classic ways
+    a "content hash" comes out different for identical content.
+    """
+    payload = json.dumps(content, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class RunLogHeader:
+    """The first line of a run log: what the run was recorded against.
+
+    The two staleness inputs come from two places on purpose. `rubric_version`
+    is the rubric's own declaration; `prompt_template_hash` is a hash of the
+    template that renders every judged prompt. A change to either makes the log
+    a fossil, and they can change independently -- editing the scaffold moves
+    no rubric version, and editing an entry's criteria moves no template hash.
+    A single combined stamp would report "something changed" and leave the
+    reader to find out what.
+    """
+
+    rubric_version: str
+    prompt_template_hash: str
+    corpus_version: str
+    artifact_hash: str
+    mode: str
+    started_at: str
+    resumed_from: tuple[str, ...] = ()
+    """When each earlier live session this log carries answers from began, oldest
+    first (D153). Empty for a log one session recorded, and then not written at
+    all, so a single-session log is byte for byte what it was before resuming
+    existed."""
+
+    def as_dict(self) -> dict[str, Any]:
+        fields: dict[str, Any] = {
+            "record": "header",
+            "rubric_version": self.rubric_version,
+            "prompt_template_hash": self.prompt_template_hash,
+            "corpus_version": self.corpus_version,
+            "artifact_hash": self.artifact_hash,
+            "mode": self.mode,
+            "started_at": self.started_at,
+        }
+        if self.resumed_from:
+            fields["resumed_from"] = list(self.resumed_from)
+        return fields
+
+    def differences_from(self, other: RunLogHeader) -> tuple[str, ...]:
+        """What makes this log stale for `other`'s state, named field by field.
+
+        Only the two the requirement names are compared. The corpus version and
+        the artifact hash are recorded so a reader can see them, but a judged
+        response depends on the prompt it was sent, and the prompt is what
+        these two cover -- refusing on a corpus version that moved for an
+        unrelated call would be refusing on something that cannot have changed
+        this request.
+        """
+        differences: list[str] = []
+        if self.rubric_version != other.rubric_version:
+            differences.append(
+                f"rubric version: log {self.rubric_version!r}, current {other.rubric_version!r}"
+            )
+        if self.prompt_template_hash != other.prompt_template_hash:
+            differences.append(
+                f"prompt-template hash: log {self.prompt_template_hash[:16]}, "
+                f"current {other.prompt_template_hash[:16]}"
+            )
+        return tuple(differences)
+
+
+@dataclass(frozen=True, slots=True)
+class RunLogEntry:
+    """One judged call, recorded whole.
+
+    Everything the requirement enumerates: the exact prompt sent, the raw
+    response received, the model identifier, the generation configuration, the
+    retry count, timings and token counts -- plus the stop reason on every
+    entry unconditionally, which is what makes truncation distinguishable from
+    a validation failure by log inspection alone.
+    """
+
+    request: JudgeRequest
+    response: JudgeResponse
+
+    def blobs(self, credentials: Sequence[str] | None = None) -> dict[str, tuple[str, Any]]:
+        """The referenced fields, scrubbed, each with the hash it is filed under.
+
+        `field -> (blob_hash, content)`. **Scrubbed before hashed**, and the
+        order matters: a hash taken over the unscrubbed value would be an
+        identifier no reader of the log could recompute from what the log
+        holds, so the file would carry a self-check that always failed.
+
+        `as_dict` is built from this rather than repeating the scrub, so the
+        hash a call record references and the hash a blob record is filed under
+        cannot become two different numbers.
+        """
+        contents: dict[str, Any] = {
+            "system": scrub_credentials(self.request.system, credentials),
+            "prompt": scrub_credentials(self.request.prompt, credentials),
+            "schema": dict(self.request.schema),
+        }
+        return {field: (blob_hash(content), content) for field, content in contents.items()}
+
+    def as_dict(self, credentials: Sequence[str] | None = None) -> dict[str, Any]:
+        """The JSON object written to the log, scrubbed on the way out.
+
+        Scrubbing happens here rather than at the writer, so there is no way to
+        serialize an entry without it -- including from a test, a tool, or a
+        later phase's log inspector.
+
+        **Four fields pass through the scrubber and only one was ever driven by
+        a test.** `response_text` is the field most likely to carry a stray
+        secret, because it is the model's text rather than this project's, and
+        a mutation removing its scrub left the whole judged-tier suite green.
+        Three of the four now travel in a blob record; they are scrubbed by
+        `blobs`, which this method calls rather than duplicates.
+
+        **`system`, `prompt` and `schema` are references** (D128, extended to
+        `prompt` at D131). What was sent stays recoverable -- by following one
+        reference rather than by reading one line -- and the requirement is
+        about recoverability rather than locality.
+        """
+        refs = self.blobs(credentials)
+        return {
+            "record": "call",
+            "entry_id": self.request.entry_id,
+            "call_id": self.request.call_id,
+            "repetition": self.request.repetition,
+            "retry_index": self.request.retry_index,
+            "request_hash": self.request.request_hash,
+            "generation_config": self.request.config.as_dict(),
+            "system_ref": refs["system"][0],
+            "prompt_ref": refs["prompt"][0],
+            "schema_ref": refs["schema"][0],
+            "response_text": scrub_credentials(self.response.text, credentials),
+            "stop_reason": self.response.stop_reason,
+            "stop_details": {
+                "category": self.response.stop_category,
+                "explanation": (
+                    None
+                    if self.response.stop_explanation is None
+                    else scrub_credentials(self.response.stop_explanation, credentials)
+                ),
+            },
+            "model": self.response.model,
+            "input_tokens": self.response.input_tokens,
+            "output_tokens": self.response.output_tokens,
+            "latency_ms": self.response.latency_ms,
+            "transport_attempts": self.response.transport_attempts,
+        }
+
+
+class RunLogWriter:
+    """Appends JSONL, one file per run, header first.
+
+    Opens in append mode and flushes every line. A judged run that aborts
+    half-way must leave behind what it already learned -- "results already
+    obtained are persisted before any subsequent abort" is a requirement, and a
+    buffered writer would satisfy it only for runs that ended tidily.
+    """
+
+    def __init__(
+        self, path: Path, header: RunLogHeader, *, credentials: Sequence[str] | None = None
+    ) -> None:
+        self._path: Final[Path] = path
+        self.header: Final[RunLogHeader] = header
+        self._credentials: Final[Sequence[str] | None] = credentials
+        self._blobs: set[str] = set()
+        """Blob hashes already written to this file. The only mutable state on
+        the writer, and what turns one string repeated 160 times into one record
+        referenced 160 times."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(header.as_dict(), sort_keys=True) + "\n")
+
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    def record(self, request: JudgeRequest, response: JudgeResponse) -> None:
+        """Append one entry, scrubbed, and flush.
+
+        `credentials` is injectable so that the credential-exclusion control
+        can drive **this method** rather than serializing an entry beside it. A
+        control that calls `RunLogEntry.as_dict` itself proves the scrubber
+        works and says nothing about whether the writer uses it -- which is the
+        shape D121 found in six controls, every one of them measuring nothing.
+        Defaults to the real environment, so the shipped path is unchanged.
+        """
+        entry = RunLogEntry(request=request, response=response)
+        fresh = [
+            {
+                "record": "blob",
+                "blob_hash": digest,
+                # Which field referenced this content **first**, for a human
+                # reading the file. The reader keys on the hash alone, so two
+                # fields holding identical content share one record rather than
+                # producing two that disagree about the label.
+                "field": field,
+                "content": content,
+            }
+            for field, (digest, content) in sorted(entry.blobs(self._credentials).items())
+            if digest not in self._blobs
+        ]
+        # **Blobs first, then the record that references them**, written as one
+        # ordered value rather than as two writes in sequence, so the order is a
+        # thing a reader and a mutation can both point at. It is the invariant the
+        # reader relies on: resolution is one pass, so a run that aborts part-way
+        # leaves a file every call record of which resolves. Written the other way
+        # round, a truncation between the two writes would leave a dangling
+        # reference inside the results the requirement says are persisted.
+        records = [*fresh, entry.as_dict(self._credentials)]
+        with self._path.open("a", encoding="utf-8", newline="\n") as handle:
+            for record in records:
+                handle.write(json.dumps(record, sort_keys=True) + "\n")
+            handle.flush()
+        self._blobs.update(blob["blob_hash"] for blob in fresh)
+
+
+#: "this log does not carry that blob", distinguishable from a blob whose
+#: content legitimately is an empty string. A module-level object rather than
+#: `None`, because `None` is a value JSON can hold.
+_ABSENT: Final[object] = object()
+
+
+def _dereference(raw: Mapping[str, Any], blobs: Mapping[str, Any], field: str) -> Any:
+    """One referenced field, or a refusal that names the field and the hash.
+
+    Two failures, told apart rather than collapsed: a call record that carries
+    no reference for this field at all, and one whose reference the log does
+    not hold. The first is a record written by something that does not know
+    this format; the second is a log that lost a line. Reporting either as the
+    other would send a reader to fix the wrong thing.
+    """
+    key = f"{field}_ref"
+    reference = raw.get(key)
+    if reference is None:
+        raise RunLogFormatError(
+            f"run-log call record for {raw.get('call_id')!r} carries no {key}, so what was "
+            f"sent as its {field} cannot be recovered. Every call record references its "
+            f"{field} by content hash (D128, D131)."
+        )
+    digest = str(reference)
+    # `_ABSENT` rather than a `not in` test, so that resolving-to-nothing is one
+    # line rather than a guard beside a lookup. The fail-open this refuses is a
+    # dangling reference quietly becoming an empty prompt, which is what the v1
+    # format's direct read would have done to a record it could not find.
+    content = blobs.get(digest, _ABSENT)
+    if content is _ABSENT:
+        raise RunLogFormatError(
+            f"run-log call record for {raw.get('call_id')!r} references {field} blob "
+            f"{digest[:16]}, which this log does not carry. A blob is written before the "
+            "record that references it, so a dangling reference means the file was damaged "
+            "rather than that it is stale or short of this request."
+        )
+    return content
+
+
+def _entry_from_dict(raw: Mapping[str, Any], blobs: Mapping[str, Any]) -> RunLogEntry:
+    """One recorded line back into the pair it was written from.
+
+    `blobs` is the table built from the records before this one, so what the
+    model was sent is recovered by following a reference rather than by reading
+    this line -- which is the trade D128 took and D131 extended.
+    """
+    config = GenerationConfig(
+        model=str(raw["generation_config"]["model"]),
+        max_tokens=int(raw["generation_config"]["max_tokens"]),
+        effort=str(raw["generation_config"]["effort"]),
+    )
+    request = JudgeRequest(
+        entry_id=str(raw["entry_id"]),
+        call_id=str(raw["call_id"]),
+        repetition=int(raw["repetition"]),
+        retry_index=int(raw["retry_index"]),
+        system=str(_dereference(raw, blobs, "system")),
+        prompt=str(_dereference(raw, blobs, "prompt")),
+        schema=_dereference(raw, blobs, "schema"),
+        config=config,
+    )
+    details = raw.get("stop_details") or {}
+    response = JudgeResponse(
+        text=str(raw["response_text"]),
+        stop_reason=str(raw["stop_reason"]),
+        stop_category=details.get("category"),
+        stop_explanation=details.get("explanation"),
+        input_tokens=int(raw["input_tokens"]),
+        output_tokens=int(raw["output_tokens"]),
+        model=str(raw["model"]),
+        latency_ms=int(raw["latency_ms"]),
+        transport_attempts=int(raw.get("transport_attempts", 1)),
+    )
+    return RunLogEntry(request=request, response=response)
+
+
+def _blob_from_dict(raw: Mapping[str, Any]) -> tuple[str, Any]:
+    """One blob record, with its own identifier checked against its content.
+
+    A log that files content under a hash it does not have is a log whose
+    self-description is wrong, and every downstream claim -- "the exact prompt
+    sent is recoverable" first among them -- rests on that description. Checked
+    on read rather than trusted, because the check costs a hash of a string the
+    reader has already parsed.
+    """
+    stated = str(raw["blob_hash"])
+    content = raw["content"]
+    actual = blob_hash(content)
+    if actual != stated:
+        raise RunLogFormatError(
+            f"run-log blob filed under {stated[:16]} holds content hashing to "
+            f"{actual[:16]}. The log's own index disagrees with what it stores, so "
+            "nothing it says about what was sent can be relied on."
+        )
+    return stated, content
+
+
+def read_run_log(path: Path) -> tuple[RunLogHeader, tuple[RunLogEntry, ...]]:
+    """Parse a run log into its header and its calls, in file order.
+
+    **One pass, and blobs must precede the records that reference them.** A
+    two-pass read would be more forgiving of a file written in any order; this
+    is stricter on purpose, because the writer's own ordering is what makes a
+    truncated log -- the one a run leaves when it aborts -- readable to its last
+    complete call.
+    """
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        raise StaleReplayLogError((f"run log {path} is empty, so it describes no state at all",))
+    raw_header = json.loads(lines[0])
+    if raw_header.get("record") != "header":
+        raise StaleReplayLogError(
+            (f"run log {path} does not begin with a header record, so its state is unknown",)
+        )
+    header = RunLogHeader(
+        rubric_version=str(raw_header["rubric_version"]),
+        prompt_template_hash=str(raw_header["prompt_template_hash"]),
+        corpus_version=str(raw_header["corpus_version"]),
+        artifact_hash=str(raw_header["artifact_hash"]),
+        mode=str(raw_header["mode"]),
+        started_at=str(raw_header["started_at"]),
+        resumed_from=tuple(str(session) for session in raw_header.get("resumed_from", ())),
+    )
+    blobs: dict[str, Any] = {}
+    entries: list[RunLogEntry] = []
+    for line in lines[1:]:
+        raw = json.loads(line)
+        kind = raw.get("record")
+        if kind == "blob":
+            digest, content = _blob_from_dict(raw)
+            blobs[digest] = content
+        elif kind == "call":
+            entries.append(_entry_from_dict(raw, blobs))
+    return header, tuple(entries)
+
+
+def stale_differences(
+    logged: RunLogHeader, current: RunLogHeader, *, allow_stale: bool
+) -> tuple[str, ...]:
+    """The named function the staleness refusal is bought with.
+
+    Returns the differences rather than raising, so the control can drive this
+    comparison directly and the caller can decide what to do with a non-empty
+    result. `allow_stale` is honored here rather than at the call site: a flag
+    consulted in one place is a flag with one meaning.
+    """
+    if allow_stale:
+        return ()
+    return logged.differences_from(current)
+
+
+def load_replay_transport(
+    path: Path, current: RunLogHeader, *, allow_stale: bool = False
+) -> ReplayTransport:
+    """A replay transport over `path`, refusing a log that has gone stale."""
+    _, index = recorded_answers(path, current, allow_stale=allow_stale)
+    return ReplayTransport(index)
+
+
+def recorded_answers(
+    path: Path, current: RunLogHeader, *, allow_stale: bool = False
+) -> tuple[RunLogHeader, dict[tuple[str, int], RunLogEntry]]:
+    """A log's header and its calls, indexed by `(request_hash, repetition)`.
+
+    The one reading replay and resume share (D153), so both refuse the same two
+    things: a log recorded against a different rubric or template, and a log
+    holding two answers to one question.
+    """
+    header, entries = read_run_log(path)
+    differences = stale_differences(header, current, allow_stale=allow_stale)
+    if differences:
+        raise StaleReplayLogError(differences)
+    index: dict[tuple[str, int], RunLogEntry] = {}
+    for entry in entries:
+        key = (entry.request.request_hash, entry.request.repetition)
+        if key in index:
+            # Refused rather than resolved. Two entries under one key is a log
+            # that describes two different answers to the same question, and
+            # keeping the last of them -- which is what this did -- makes a
+            # replay depend on file order in the one mechanism whose whole
+            # design is that it does not. Unreachable from a writer that opens
+            # with `w`; reachable from a concatenated or hand-edited log, which
+            # is exactly when nobody is watching.
+            raise StaleReplayLogError(
+                (
+                    f"run log {path} holds two entries for request "
+                    f"{key[0][:16]} repetition {key[1]}, so it describes two answers "
+                    "to one question",
+                )
+            )
+        index[key] = entry
+    return header, index
+
+
+def resumed_header(prior: RunLogHeader, current: RunLogHeader, path: Path) -> RunLogHeader:
+    """The header a run resumed from `prior` writes: `current`, carrying the sessions (D153).
+
+    Refuses a log recorded in replay mode, whose answers no session issued. The
+    staleness refusal is `recorded_answers`', and deliberately has no override
+    for a resume: a log assembled across a rubric or template change would
+    describe two states under one header, which is the fossil that refusal exists
+    to prevent. A log resumed twice names every session it carries, oldest first.
+    """
+    if prior.mode != "live":
+        raise ResumeRefusedError(
+            f"cannot resume {path.name}: it was recorded in {prior.mode!r} mode, so its answers "
+            "were served rather than issued, and a resumed log keeps `mode: live` only "
+            "because every call in it went to the API"
+        )
+    return replace(current, resumed_from=(*prior.resumed_from, prior.started_at))
+
+
+def rates_for(model: str) -> tuple[float, float]:
+    """The (input, output) rate per million tokens, or a refusal naming the model."""
+    for name, input_rate, output_rate in PRICING_USD_PER_MTOK:
+        if name == model:
+            return input_rate, output_rate
+    raise UnpricedModelError(model)
+
+
+def estimate_cost_usd(
+    *, model: str, calls: int, input_tokens_each: int, output_tokens_each: int
+) -> float:
+    """What a live run is expected to cost, in dollars.
+
+    An estimate a human reads before agreeing to spend. It is deliberately a
+    plain arithmetic function over declared rates rather than anything cleverer:
+    the number's job is to be checkable by the person deciding, and a figure
+    they cannot recompute in their head is a figure they will approve without
+    reading.
+    """
+    input_rate, output_rate = rates_for(model)
+    million = 1_000_000
+    return (
+        calls * input_tokens_each * input_rate / million
+        + calls * output_tokens_each * output_rate / million
+    )
+
+
+def iter_log_entries(path: Path) -> Iterator[RunLogEntry]:
+    """Every call entry in a run log. For the tools that inspect one."""
+    _, entries = read_run_log(path)
+    yield from entries

@@ -1,0 +1,74 @@
+# Credentials — never commit. The pre-commit secret guard is the backstop;
+# this entry is the primary control. See specs/ D2, D11, D14.
+.env
+
+# Publication-deferred material (build log, drafts, anything not yet decided).
+# Named generically on purpose: a committed .gitignore listing specific
+# filenames would itself disclose what is being withheld.
+private/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+build/
+
+# The findings review worksheet is rendered on demand, not committed (D76).
+# Its purpose -- scaffolding for the one phase-1 step a model must not do -- was
+# discharged when the last ruling landed, and it was never used for it:
+# adjudication happened in dialogue and landed in corpus/findings.adjudication.yaml.
+# What remained was 221KB of derived text whose own preamble had gone stale.
+#     python tools/make_review_worksheet.py            # to the default path
+#     python tools/make_review_worksheet.py --out X.md # anywhere
+corpus/findings.review-worksheet.md
+
+# The comparative-judgment store: the pairwise comparison log, built by
+# `cj compare` and read by `cj fit`/`cuts`/`export`. Not committed — only its
+# hash travels, in the severity file's `comparison_log_hash`, which is what
+# makes severity provenance checkable without publishing every judgment.
+# Recreate with `cj init --store .cj-store` and re-run the loop; the log is a
+# record of one rater's session, not a project artifact.
+.cj-store/
+
+# Written by the session-resume tooling on this machine, in the repository root
+# where `git add` would reach it. Absolute Windows paths and a session UUID — it
+# describes one workstation, not the project.
+resume_session.txt
+
+# Judged run logs. Every judged run writes one, in both modes, so this
+# directory fills up with per-run files that describe one invocation — except
+# the reference log, which is the artifact replay mode exists to replay (D8)
+# and is committed by name. `runs/*` rather than `runs/`, because a directory
+# excluded wholesale cannot have a file re-included from inside it.
+runs/*
+!runs/reference-*.jsonl
+
+# And one fossil, kept by name. `runs/measured/` holds a log recorded against a
+# rubric this project has since changed, kept because the change **removed the
+# measurement from the current log**: D132's precondition means the dimension
+# produces no verdict for a call that retrieved no policy, so the verdicts D125
+# and D132 both rest on are unreadable in anything recorded afterwards. Nothing
+# replays it and nothing should; it is read.
+!runs/measured/
+!runs/measured/*.jsonl
+
+# The report snapshot is NOT here, and `build/` is. The snapshot is the
+# committed artifact the golden regression compares against (D8), so it lives
+# in `snapshots/` where a mechanism reads it by name -- `build/` is where
+# generated intermediates go, and a snapshot generated into a directory nobody
+# commits is a regression test comparing a run against itself.
+
+# The sibling repository, when it is checked out inside this root. CI does exactly
+# that for the interface scanner (`path: comparative-judgment`), and a session may
+# do it by hand. It is another repository's working copy, never this one's, and
+# D207 has the license check skip a directory carrying its own `.git` for the same
+# reason -- the ignore keeps `git status` honest, the check does not depend on it.
+comparative-judgment/

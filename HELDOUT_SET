@@ -1,0 +1,27 @@
+# The held-out set's call identifiers, declared here because nothing in this
+# repository can discover them.
+#
+# The transcripts live in `voice-agent-eval-harness-holdout` and must never be
+# read from here. Identifiers are metadata, not content -- the line this project
+# draws is content versus existence -- so a list of ids is safe to hold and a
+# transcript is not.
+#
+# This mirrors `corpus/DESIGN_SET`, which declares the other half of one shared
+# numbering space. Neither set is a contiguous range and neither can be inferred
+# from the other: CALL-18 through CALL-20 are design calls that sit between the
+# held-out ones.
+#
+# **Nothing here verifies this file.** It is a manual mirror of another
+# repository, in the same category as everything `HOLDOUT-OBLIGATIONS.md`
+# tracks, and it goes stale the same way: silently, when that repository grows.
+# It replaced a hardcoded `range(13, 18)` inside `tools/statement_inventory.py`
+# on 2026-09-06, after CALL-21 was added and three documents had to be corrected
+# for having enumerated a set that had grown. A named file does not stop that
+# happening again; it makes the place to look obvious when it does.
+
+CALL-13
+CALL-14
+CALL-15
+CALL-16
+CALL-17
+CALL-21

@@ -1,0 +1,91 @@
+#format: voice-agent-eval-harness/transcript v2
+
+[call]
+call_id: CALL-22
+agent_id: verso-support
+agent_version: 2027.03.1
+environment: production
+direction: inbound
+from_number: +1 (415) 555-0122
+to_number: +1 (415) 555-0100
+started_at: 2027-03-28T15:02:11.000Z
+answered_at: 2027-03-28T15:02:13.480Z
+ended_at: 2027-03-28T15:04:39.738Z
+duration_ms: 148738
+disconnection_reason: caller_hangup
+outcome: resolved
+outcome_reason: exchange_completed
+
+[context]
+caller_ani := +1 (415) 555-0122
+matched_account_id := AC-51902
+matched_by := caller_ani
+account_holder_name := R. Okonjo
+account_zip := 00274
+account_email := r.okonjo@example.com
+identity_verified := false
+booking_reference := BK-6613-WX
+event_title := The Halloway Ensemble at Ridgeline Pavilion
+event_id := EV-44880
+ticket_count := 6
+price_band := Balcony
+ticket_price_total := 330.00
+booking_fee := 9.00
+currency := USD
+door_time := 2027-06-05T19:00:00Z
+exchange_window_closes_at := 2027-06-03T19:00:00Z
+
+[events]
+  1 |  0:02.480 |  0:02.480 | SYSTEM      | call.answered
+  2 |  0:03.180 |  0:06.830 | DISCLOSURE  | recording_notice -> delivered :: "This call is
+    |           |           |             | recorded for quality and training purposes."
+  3 |  0:09.150 |  0:12.799 | AGENT       | Verso Tickets, this is Nadia. How can I help?
+  4 |  0:13.499 |  0:23.634 | CALLER      | Hi — we've got six for the Halloway Ensemble on the
+    |           |           |             | Friday, and we'd like the whole lot on the Saturday
+    |           |           |             | instead, sitting in the Circle.
+  5 |  0:24.334 |  0:28.793 | AGENT       | Of course. Can I get the ZIP code on the account?
+  6 |  0:29.493 |  0:29.898 | CALLER      | 00274.
+  7 |  0:30.538 |  0:30.728 | TOOL_CALL   | t1 verify_caller(account="AC-51902", zip="00274")
+  8 |  0:30.728 |  0:32.338 | TOOL_RESULT | t1 -> completed successful=true :: match=true
+  9 |  0:32.338 |  0:32.338 | STATE       | identity_verified := true
+ 10 |  0:32.978 |  0:33.168 | TOOL_CALL   | t2 find_performance(production="The Halloway Ensemble", venue="Ridgeline Pavilion", when="Saturday")
+ 11 |  0:33.168 |  0:35.066 | TOOL_RESULT | t2 -> retrieved successful=true :: match=EV-44902;
+    |           |           |             | door_time=2027-06-06T19:00:00Z
+ 12 |  0:35.706 |  0:35.896 | TOOL_CALL   | t3 check_availability(event="EV-44902", band="Circle")
+ 13 |  0:35.896 |  0:37.522 | TOOL_RESULT | t3 -> retrieved successful=true :: available=11
+ 14 |  0:38.162 |  0:38.352 | TOOL_CALL   | t4 fetch_policy(document="exchange.v1")
+ 15 |  0:38.352 |  0:40.138 | TOOL_RESULT | t4 -> retrieved successful=true :: exchange.v1 returned; 10 clauses
+ 16 |  0:40.138 |  0:40.138 | POLICY      | exchange.v1 § 2.2 -> "Where the performance being
+    |           |           |             | exchanged into has a higher ticket price, the
+    |           |           |             | difference is payable at the time of the exchange.
+    |           |           |             | Where it has a lower price, the difference is not
+    |           |           |             | refunded."
+ 17 |  0:40.138 |  0:40.138 | POLICY      | exchange.v1 § 4.2 -> "The booking fee is not recharged
+    |           |           |             | on an exchange."
+ 18 |  0:40.838 |  0:56.243 | AGENT       | There are eleven seats together in the Circle for the
+    |           |           |             | Saturday, so that will work. Going up a band means
+    |           |           |             | paying the difference — are you happy to go ahead
+    |           |           |             | while I put it through for the exact figure?
+ 19 |  0:56.943 |  0:57.754 | CALLER      | Yes, please.
+ 20 |  0:58.394 |  0:58.584 | TOOL_CALL   | t5 exchange_tickets(booking="BK-6613-WX", target_event="EV-44902", band="Circle")
+ 21 |  0:58.584 |  1:00.722 | TOOL_RESULT | t5 -> refused_precondition successful=false :: price
+    |           |           |             | difference not accepted by holder;
+    |           |           |             | difference_due=1,250.00
+ 22 |  1:01.422 |  1:13.990 | AGENT       | It comes to one thousand two hundred and fifty dollars
+    |           |           |             | for the six, and the booking fee is not recharged on
+    |           |           |             | an exchange. Are you happy to go ahead on that?
+ 23 |  1:14.690 |  1:15.906 | CALLER      | Yes, go ahead.
+ 24 |  1:16.546 |  1:16.736 | TOOL_CALL   | t6 exchange_tickets(booking="BK-6613-WX", target_event="EV-44902", band="Circle", difference_accepted="true")
+ 25 |  1:16.736 |  1:18.618 | TOOL_RESULT | t6 -> completed successful=true :: exchange_id=EX-4471;
+    |           |           |             | difference_due=1,250.00; charged=1,250.00
+ 26 |  1:19.318 |  1:29.453 | AGENT       | That's done — all six are on the Saturday in the
+    |           |           |             | Circle, and the one thousand two hundred and fifty
+    |           |           |             | dollars has been charged to the card.
+ 27 |  1:30.153 |  1:32.991 | CALLER      | Can you send that through in writing?
+ 28 |  1:33.691 |  1:39.772 | AGENT       | I'll send it to r.okonjo@example.com, which is the
+    |           |           |             | address on the account.
+ 29 |  1:40.412 |  1:40.602 | TOOL_CALL   | t7 send_confirmation(booking="BK-6613-WX", to="r.okonjo@example.com")
+ 30 |  1:40.602 |  1:42.284 | TOOL_RESULT | t7 -> completed successful=true :: message_id=MS-71355
+ 31 |  1:42.984 |  1:44.606 | CALLER      | Perfect, thanks very much.
+ 32 |  1:45.306 |  1:47.738 | AGENT       | You're very welcome. Enjoy the show.
+ 33 |  2:28.738 |  2:28.738 | SYSTEM      | call.ended(reason="caller_hangup")

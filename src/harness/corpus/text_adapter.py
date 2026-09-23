@@ -1,0 +1,752 @@
+"""Adapter 1: realistic wrapped text -> the canonical event stream.
+
+**This is an adapter, not the contract.** `specs/event-model.md` is the
+contract, and nothing above this line knows a call came from a text file. A
+second adapter over a real platform's call object is what proves that (P6); the
+mapping table in the event model is what someone writing a third one reads.
+
+Grammar: `specs/transcript-format.md`.
+
+Three behaviors are fixes for measured defects rather than preferences:
+
+* **A malformed line is recorded, not raised.** The reference implementation's
+  extraction test crashed on a malformed file rather than reporting the
+  violation it had already recorded (W19), and its metadata handling dropped
+  unexpected lines silently with no counter (W18). So `parse_call` returns its
+  unparsed lines and the *caller* decides the run fails.
+
+* **A token outside a closed vocabulary aborts immediately.** Not the same case:
+  a line the grammar cannot read is a counting problem, but an unknown status or
+  disconnection reason means the corpus and the harness disagree about the
+  vocabulary itself (W15).
+
+* **Wrapping is handled once, for every kind.** In the reference the rule
+  covered turns, so a wrapped variable value silently lost its leading fragment
+  while the adjacent branch handled the identical case correctly (W16). One rule
+  has no second branch to disagree with.
+"""
+
+from __future__ import annotations
+
+import re
+from enum import StrEnum
+from pathlib import Path
+from typing import Final
+
+from harness.core.events import (
+    FORMAT_HEADER,
+    REQUIRED_CALL_KEYS,
+    Call,
+    CallRecord,
+    Direction,
+    DisclosureEvent,
+    DisclosureState,
+    DisconnectionReason,
+    Environment,
+    Event,
+    EventKind,
+    MalformedTranscriptError,
+    Outcome,
+    PolicyEvent,
+    SpeechEvent,
+    StateEvent,
+    SystemEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+    ToolStatus,
+    UnknownTokenError,
+    UnparsedLine,
+    citation_population,
+)
+
+_CALL_SECTION: Final[str] = "[call]"
+_CONTEXT_SECTION: Final[str] = "[context]"
+_EVENTS_SECTION: Final[str] = "[events]"
+
+_TIMESTAMP_RE: Final[re.Pattern[str]] = re.compile(r"^(\d+):([0-5]\d)\.(\d{3})$")
+#: `transcript-format.md` §2: UTC ISO-8601, millisecond precision, `Z` suffix.
+#:
+#: All three stamps were stored as raw strings with no format check. That
+#: matters more than it looks: `test_header_duration_reconciles_with_the_event_log`
+#: calls `datetime.fromisoformat` on them, so a malformed stamp surfaced as a
+#: `ValueError` inside a hygiene test rather than as a named parse failure at
+#: the point the file was read.
+_CALL_TIMESTAMP_RE: Final[re.Pattern[str]] = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"
+)
+
+_CALL_ID_RE: Final[re.Pattern[str]] = re.compile(r"^CALL-\d{2,}$")
+_TOOL_ID_RE: Final[re.Pattern[str]] = re.compile(r"^t\d+$")
+
+_TOOL_CALL_RE: Final[re.Pattern[str]] = re.compile(
+    r"^(?P<id>t\d+)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\((?P<args>.*)\)$"
+)
+_TOOL_RESULT_RE: Final[re.Pattern[str]] = re.compile(
+    r"^(?P<id>t\d+)\s*->\s*(?P<status>\S+)\s+successful=(?P<ok>true|false)"
+    r"(?:\s*::\s*(?P<detail>.*))?$"
+)
+_ASSIGNMENT_RE: Final[re.Pattern[str]] = re.compile(
+    r"^(?P<name>[A-Za-z_][A-Za-z0-9_.]*)\s*:=\s*(?P<value>.*)$"
+)
+_POLICY_RE: Final[re.Pattern[str]] = re.compile(
+    r'^(?P<document>[A-Za-z0-9_.\-]+)\s*§\s*(?P<clause>\S+)\s*->\s*"(?P<text>.*)"$'
+)
+_DISCLOSURE_RE: Final[re.Pattern[str]] = re.compile(
+    r'^(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*->\s*(?P<state>\w+)(?:\s*::\s*"(?P<text>.*)")?$'
+)
+_SYSTEM_RE: Final[re.Pattern[str]] = re.compile(
+    r"^(?P<name>[A-Za-z_][A-Za-z0-9_.]*)(?:\((?P<args>.*)\))?$"
+)
+
+
+class _Pending:
+    """An event being assembled from one or more source lines."""
+
+    __slots__ = ("declared_index", "ended_ms", "fragments", "kind", "source_lines", "started_ms")
+
+    def __init__(
+        self, declared_index: int, started_ms: int, ended_ms: int, kind: EventKind, line: int
+    ) -> None:
+        self.declared_index = declared_index
+        self.started_ms = started_ms
+        self.ended_ms = ended_ms
+        self.kind = kind
+        self.fragments: list[str] = []
+        self.source_lines: list[int] = [line]
+
+
+def _read_lines(path: Path) -> tuple[str, ...]:
+    """Source lines, reported 1-based everywhere else.
+
+    A trailing CR is stripped rather than rejected: the format specifies LF, but
+    a Windows checkout can introduce CRLF through git's own normalization, and
+    failing a corpus for its line endings would be a refusal with no defect
+    behind it.
+
+    **A leading byte-order mark is stripped on the same argument.** A BOM is
+    invisible in every editor that writes one, carries no information about the
+    call, and is exactly what PowerShell's `Out-File -Encoding utf8` produces --
+    which this project has already been bitten by once, in a commit subject.
+    Left in place it reaches the header comparison as part of the first line and
+    the transcript is refused with a message quoting `'\ufeff#format: ...'`,
+    which reads as a corrupt file rather than as an encoding artifact. Refusing
+    a corpus for a BOM would be a refusal with no defect behind it, which is the
+    sentence above, one artifact over.
+    """
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        text = handle.read()
+    return tuple(line.rstrip("\r") for line in text.split("\n"))
+
+
+def _parse_timestamp(raw: str) -> int | None:
+    match = _TIMESTAMP_RE.match(raw)
+    if match is None:
+        return None
+    minutes, seconds, millis = (int(part) for part in match.groups())
+    return (minutes * 60 + seconds) * 1000 + millis
+
+
+def _enum_or_abort[E: StrEnum](
+    enum: type[E], token: str, path: Path, line: int, vocabulary: str
+) -> E:
+    """A closed-vocabulary token inside the event stream. Aborts, naming the line."""
+    values = [member.value for member in enum]
+    if token not in values:
+        raise UnknownTokenError(str(path), line, vocabulary, token, ", ".join(values))
+    return enum(token)
+
+
+def _enum_field[E: StrEnum](path: Path, field: str, token: str, enum: type[E]) -> E:
+    """A closed-vocabulary token in the `[call]` block.
+
+    A file-level defect rather than a line-level one: a call record naming an
+    environment or a disconnection reason nothing defines has no usable call to
+    attach a per-line counter to.
+    """
+    values = [member.value for member in enum]
+    if token not in values:
+        raise MalformedTranscriptError(
+            f"{path}: {field} {token!r} is not one of {', '.join(values)}"
+        )
+    return enum(token)
+
+
+def _sections(path: Path, lines: tuple[str, ...]) -> tuple[int, int, int]:
+    """Where each section starts. Each marker must appear exactly once.
+
+    This assigned `found[marker] = offset` over the whole file, so a second
+    `[call]` overwrote the first and everything between them was never read --
+    a doubled block parsed cleanly and reported the *second* `call_id`.
+    `transcript-format.md` §1 says "four parts, in order"; the order was
+    enforced and the cardinality was not, and the failure is silent in the worst
+    way: it does not lose a value, it substitutes one.
+    """
+    seen: dict[str, list[int]] = {}
+    for offset, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped in (_CALL_SECTION, _CONTEXT_SECTION, _EVENTS_SECTION):
+            seen.setdefault(stripped, []).append(offset)
+
+    repeated = {marker: at for marker, at in seen.items() if len(at) > 1}
+    if repeated:
+        detail = "; ".join(
+            f"{marker} at lines {', '.join(str(offset + 1) for offset in at)}"
+            for marker, at in sorted(repeated.items())
+        )
+        raise MalformedTranscriptError(f"{path}: section marker(s) repeated: {detail}")
+
+    found = {marker: at[0] for marker, at in seen.items()}
+    missing = [s for s in (_CALL_SECTION, _CONTEXT_SECTION, _EVENTS_SECTION) if s not in found]
+    if missing:
+        raise MalformedTranscriptError(f"{path}: missing section(s): {', '.join(missing)}")
+    call_at, context_at, events_at = (
+        found[_CALL_SECTION],
+        found[_CONTEXT_SECTION],
+        found[_EVENTS_SECTION],
+    )
+    if not call_at < context_at < events_at:
+        raise MalformedTranscriptError(
+            f"{path}: sections must appear in the order {_CALL_SECTION}, "
+            f"{_CONTEXT_SECTION}, {_EVENTS_SECTION}"
+        )
+    return call_at, context_at, events_at
+
+
+def _parse_call_record(path: Path, lines: tuple[str, ...], start: int, end: int) -> CallRecord:
+    values: dict[str, str] = {}
+    for offset in range(start, end):
+        raw = lines[offset].strip()
+        if not raw or raw.startswith("#"):
+            continue
+        if ":" not in raw:
+            raise MalformedTranscriptError(
+                f"{path}:{offset + 1}: [call] line is not `key: value`: {raw!r}"
+            )
+        key, _, value = raw.partition(":")
+        key, value = key.strip(), value.strip()
+        if key in values:
+            raise MalformedTranscriptError(f"{path}:{offset + 1}: duplicate [call] key {key!r}")
+        if key not in REQUIRED_CALL_KEYS:
+            raise MalformedTranscriptError(
+                f"{path}:{offset + 1}: unknown [call] key {key!r}; expected one of "
+                f"{', '.join(REQUIRED_CALL_KEYS)}"
+            )
+        values[key] = value
+
+    missing = tuple(key for key in REQUIRED_CALL_KEYS if key not in values)
+    if missing:
+        raise MalformedTranscriptError(f"{path}: missing [call] key(s): {', '.join(missing)}")
+
+    if not _CALL_ID_RE.match(values["call_id"]):
+        raise MalformedTranscriptError(
+            f"{path}: call_id {values['call_id']!r} does not match CALL-<digits>"
+        )
+    for key in ("started_at", "answered_at", "ended_at"):
+        if not _CALL_TIMESTAMP_RE.match(values[key]):
+            raise MalformedTranscriptError(
+                f"{path}: {key} {values[key]!r} is not UTC ISO-8601 with millisecond "
+                "precision and a Z suffix (YYYY-MM-DDTHH:MM:SS.mmmZ)"
+            )
+
+    try:
+        duration = int(values["duration_ms"])
+    except ValueError:
+        raise MalformedTranscriptError(
+            f"{path}: duration_ms {values['duration_ms']!r} is not an integer"
+        ) from None
+    if duration < 0:
+        raise MalformedTranscriptError(
+            f"{path}: duration_ms is {duration}, and a call cannot last a negative time"
+        )
+
+    return CallRecord(
+        call_id=values["call_id"],
+        agent_id=values["agent_id"],
+        agent_version=values["agent_version"],
+        environment=_enum_field(path, "environment", values["environment"], Environment),
+        direction=_enum_field(path, "direction", values["direction"], Direction),
+        from_number=values["from_number"],
+        to_number=values["to_number"],
+        started_at=values["started_at"],
+        answered_at=values["answered_at"],
+        ended_at=values["ended_at"],
+        duration_ms=duration,
+        disconnection_reason=_enum_field(
+            path, "disconnection_reason", values["disconnection_reason"], DisconnectionReason
+        ),
+        outcome=_enum_field(path, "outcome", values["outcome"], Outcome),
+        outcome_reason=values["outcome_reason"],
+    )
+
+
+def _parse_context(
+    path: Path, lines: tuple[str, ...], start: int, end: int
+) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[int, ...], ...]]:
+    """`[context]` -- what the agent could see before it spoke.
+
+    **Continuation is positional: an indented line continues the value above
+    it, whatever it contains.** A line starting in column 0 must be
+    `name := value`.
+
+    The rule used to be content-based -- any line that did not match
+    `name :=` continued the previous value -- and the docstring called that
+    "the same continuation rule as the event stream", which it was not. The
+    event rule is positional: an empty index field. Two rules, one of them
+    described as the other, and the difference corrupted silently:
+
+    * a wrapped value whose continuation happened to contain ` := ` was split
+      into a **fabricated second variable**, and
+    * a continuation beginning with `#` was read as a comment and **dropped**,
+      losing the tail of the value.
+
+    Neither produced an unparsed line, an error, or a counter. That is W17 (a
+    fabricated fact entering the record from punctuation) and W16 (a fragment
+    silently lost) reappearing in the one block whose rule the format
+    specification never stated -- and the context record is what decides
+    whether a finding's owner is the agent or the platform.
+
+    Positional is the right polarity for the same reason it is in the event
+    stream: the marker cannot collide with the content.
+    """
+    pairs: list[tuple[str, list[str], list[int]]] = []
+    for offset in range(start, end):
+        raw = lines[offset].rstrip()
+        if not raw.strip():
+            continue
+
+        indented = raw[:1].isspace()
+        if indented:
+            if not pairs:
+                raise MalformedTranscriptError(
+                    f"{path}:{offset + 1}: [context] continuation line with no assignment "
+                    f"above it: {raw.strip()!r}"
+                )
+            pairs[-1][1].append(raw.strip())
+            pairs[-1][2].append(offset + 1)
+            continue
+
+        if raw.startswith("#"):
+            continue
+        match = _ASSIGNMENT_RE.match(raw)
+        if match is None:
+            raise MalformedTranscriptError(
+                f"{path}:{offset + 1}: [context] line is not `name := value` and is not "
+                f"indented as a continuation: {raw.strip()!r}"
+            )
+        pairs.append((match.group("name"), [match.group("value").strip()], [offset + 1]))
+
+    values = tuple((name, " ".join(part for part in parts if part)) for name, parts, _ in pairs)
+    spans = tuple(tuple(at) for _, _, at in pairs)
+    return values, spans
+
+
+def _resync(expected_index: int, index_field: str) -> int:
+    """Where the next event index should be, after rejecting a line.
+
+    **One defect must cost one finding.** A rejected line still occupied a
+    position, so the expectation advances past it; and if the line declared a
+    readable index, the expectation resyncs to that index plus one -- the same
+    thing the out-of-sequence branch does, so a file that is internally
+    consistent after the damage stops being punished for it.
+
+    Two rejection paths did neither, and the field-count path is reachable with
+    a perfectly readable index. The project's own fixture shows the cost: the
+    line after the damaged one is commented "Another well-formed line", is well
+    formed, and was reported as out of sequence. The test named for exactly this
+    invariant asserted over the surviving event indices, which the bug does not
+    disturb, so it passed.
+    """
+    try:
+        return int(index_field.strip()) + 1
+    except ValueError:
+        return expected_index + 1
+
+
+def _build_event(path: Path, lines: tuple[str, ...], pending: _Pending, citation_id: str) -> Event:
+    """Turn a reassembled pending event into its typed form.
+
+    Raises `ValueError` when the body does not match its kind's grammar; the
+    caller converts that into unparsed lines rather than an abort. Raises
+    `UnknownTokenError` for a closed-vocabulary violation, which does abort.
+    """
+    body = " ".join(fragment.strip() for fragment in pending.fragments if fragment.strip())
+    if not body:
+        # An utterance with no words is not an utterance. Left unchecked it
+        # reaches the citation universe as an empty citable line, which is the
+        # W1 family: a population the prompt renders and the validator cannot
+        # match. Counted rather than raised, like every other unreadable body.
+        raise ValueError(f"{pending.kind.value} event has an empty body")
+    # The seven common fields are passed explicitly to every constructor rather
+    # than splatted from a dict. A `**common` dict is shorter and defeats the
+    # type checker entirely -- mypy sees `dict[str, object]` and can no longer
+    # tell `index: int` from `body: str`. "type-check passes" is an acceptance
+    # criterion, and a construction the checker cannot see through makes it one
+    # that passes without checking anything.
+    kind = pending.kind
+    index = pending.declared_index
+    started = pending.started_ms
+    ended = pending.ended_ms
+    source_lines = tuple(pending.source_lines)
+
+    if kind in (EventKind.CALLER, EventKind.AGENT):
+        # The emptiness check that used to sit here was unreachable: `body` is
+        # rejected above, for every kind, before this branch is chosen. Removed
+        # rather than left as reassurance -- a second guard on a condition
+        # already raised reads as defense in depth and is dead code, and a
+        # reader trusting it would think speech was checked twice.
+        return SpeechEvent(
+            index=index,
+            started_at_ms=started,
+            ended_at_ms=ended,
+            kind=kind,
+            body=body,
+            citation_id=citation_id,
+            source_lines=source_lines,
+        )
+
+    if kind is EventKind.TOOL_CALL:
+        match = _TOOL_CALL_RE.match(body)
+        if match is None:
+            raise ValueError("tool call does not match `<id> name(args)`")
+        return ToolCallEvent(
+            index=index,
+            started_at_ms=started,
+            ended_at_ms=ended,
+            kind=kind,
+            body=body,
+            citation_id=citation_id,
+            source_lines=source_lines,
+            tool_call_id=match.group("id"),
+            name=match.group("name"),
+            arguments=match.group("args"),
+        )
+
+    if kind is EventKind.TOOL_RESULT:
+        match = _TOOL_RESULT_RE.match(body)
+        if match is None:
+            raise ValueError(
+                "tool result does not match `<id> -> status successful=<bool> [:: detail]`"
+            )
+        token = match.group("status")
+        status = _enum_or_abort(
+            ToolStatus, token, path, _find_token_line(pending, lines, token), "tool status"
+        )
+        detail = match.group("detail")
+        return ToolResultEvent(
+            index=index,
+            started_at_ms=started,
+            ended_at_ms=ended,
+            kind=kind,
+            body=body,
+            citation_id=citation_id,
+            source_lines=source_lines,
+            tool_call_id=match.group("id"),
+            status=status,
+            successful=match.group("ok") == "true",
+            detail=detail.strip() if detail else None,
+        )
+
+    if kind is EventKind.STATE:
+        match = _ASSIGNMENT_RE.match(body)
+        if match is None:
+            raise ValueError("state event does not match `name := value`")
+        return StateEvent(
+            index=index,
+            started_at_ms=started,
+            ended_at_ms=ended,
+            kind=kind,
+            body=body,
+            citation_id=citation_id,
+            source_lines=source_lines,
+            name=match.group("name"),
+            value=match.group("value").strip(),
+        )
+
+    if kind is EventKind.POLICY:
+        match = _POLICY_RE.match(body)
+        if match is None:
+            raise ValueError('policy event does not match `document.version § clause -> "text"`')
+        return PolicyEvent(
+            index=index,
+            started_at_ms=started,
+            ended_at_ms=ended,
+            kind=kind,
+            body=body,
+            citation_id=citation_id,
+            source_lines=source_lines,
+            document=match.group("document"),
+            clause=match.group("clause"),
+            text=match.group("text"),
+        )
+
+    if kind is EventKind.DISCLOSURE:
+        match = _DISCLOSURE_RE.match(body)
+        if match is None:
+            raise ValueError('disclosure does not match `name -> state [:: "text"]`')
+        token = match.group("state")
+        state = _enum_or_abort(
+            DisclosureState,
+            token,
+            path,
+            _find_token_line(pending, lines, token),
+            "disclosure state",
+        )
+        return DisclosureEvent(
+            index=index,
+            started_at_ms=started,
+            ended_at_ms=ended,
+            kind=kind,
+            body=body,
+            citation_id=citation_id,
+            source_lines=source_lines,
+            name=match.group("name"),
+            state=state,
+            text=match.group("text"),
+        )
+
+    match = _SYSTEM_RE.match(body)
+    if match is None:
+        raise ValueError("system event does not match `name` or `name(args)`")
+    return SystemEvent(
+        index=index,
+        started_at_ms=started,
+        ended_at_ms=ended,
+        kind=kind,
+        body=body,
+        citation_id=citation_id,
+        source_lines=source_lines,
+        name=match.group("name"),
+        arguments=match.group("args") or "",
+    )
+
+
+def _find_token_line(pending: _Pending, lines: tuple[str, ...], token: str) -> int:
+    """The source line the offending token actually appears on.
+
+    A diagnostic naming the event's first line would be wrong whenever the token
+    wrapped, and naming the source line is the part of the requirement that
+    makes the message worth printing.
+    """
+    for line_number in pending.source_lines:
+        if token in lines[line_number - 1]:
+            return line_number
+    return pending.source_lines[0]
+
+
+def check_tool_pairing(
+    path: Path, events: tuple[Event, ...], unparsed: tuple[UnparsedLine, ...]
+) -> None:
+    """Every result references an earlier call; every call has one result.
+
+    This is the structural half of the dependency chain the event model
+    specifies. A dangling call or an orphan result means the log cannot say
+    whether an action completed, and every ordering assertion built on it would
+    be reasoning about a confirmation that is not there.
+
+    **It runs only over a stream with nothing unreadable in it.** The check sees
+    surviving events, so a `TOOL_RESULT` rejected into `unparsed` leaves its
+    `TOOL_CALL` looking dangling -- and the abort then named the well-formed
+    invocation and never mentioned the malformed line. Changing one arrow in a
+    result body was enough to produce *"tool call(s) with no result: t1"*, which
+    is true of the parsed stream and useless as a diagnosis.
+
+    That also contradicted this module's first stated principle, that a line the
+    grammar cannot read is a counting problem rather than an abort. When
+    `unparsed` is non-empty the run already fails on the count, with a message
+    naming the actual line and its line number, so aborting here adds nothing
+    but a wrong explanation. Pairing is checked when there is a complete stream
+    to check it against, and reported as a counted violation otherwise.
+    """
+    if unparsed:
+        return
+    calls: dict[str, int] = {}
+    results: dict[str, int] = {}
+    for event in events:
+        if isinstance(event, ToolCallEvent):
+            if event.tool_call_id in calls:
+                raise MalformedTranscriptError(
+                    f"{path}: tool call id {event.tool_call_id!r} is used twice "
+                    f"(events {calls[event.tool_call_id]} and {event.index})"
+                )
+            calls[event.tool_call_id] = event.index
+        elif isinstance(event, ToolResultEvent):
+            if event.tool_call_id in results:
+                raise MalformedTranscriptError(
+                    f"{path}: tool call id {event.tool_call_id!r} has two results"
+                )
+            if event.tool_call_id not in calls:
+                raise MalformedTranscriptError(
+                    f"{path}: event {event.index} is a result for {event.tool_call_id!r}, "
+                    "which has no earlier invocation"
+                )
+            results[event.tool_call_id] = event.index
+
+    dangling = sorted(set(calls) - set(results))
+    if dangling:
+        raise MalformedTranscriptError(
+            f"{path}: tool call(s) with no result: {', '.join(dangling)}. A call whose outcome "
+            "is never confirmed cannot be reasoned about."
+        )
+
+
+def parse_call(path: Path) -> Call:
+    """Parse one transcript into the canonical form."""
+    lines = _read_lines(path)
+    # `"".split("\n")` is `[""]`, never `[]`, so `not lines` was false for every
+    # input and the "file is empty" message could not be produced. An empty file
+    # reported that its first line must be the header, "found ''" -- true, and
+    # the least useful way to say a file has no content in it.
+    if not any(line.strip() for line in lines):
+        raise MalformedTranscriptError(f"{path}: file is empty")
+    if lines[0].strip() != FORMAT_HEADER:
+        raise MalformedTranscriptError(
+            f"{path}:1: first line must be {FORMAT_HEADER!r}, found {lines[0].strip()!r}"
+        )
+
+    call_at, context_at, events_at = _sections(path, lines)
+    record = _parse_call_record(path, lines, call_at + 1, context_at)
+    context, context_source_lines = _parse_context(path, lines, context_at + 1, events_at)
+
+    events: list[Event] = []
+    unparsed: list[UnparsedLine] = []
+    counters: dict[str, int] = {"T": 0, "F": 0}
+    pending: _Pending | None = None
+    expected_index = 1
+
+    def flush() -> None:
+        nonlocal pending, expected_index
+        if pending is None:
+            return
+        population = citation_population(pending.kind)
+        citation_id = f"{population}{counters[population] + 1}"
+        # Advanced unconditionally: the index sequence is a property of the
+        # DECLARED indices, so a rejected body must not also make the next event
+        # look out of sequence. One defect should cost one finding.
+        expected_index = pending.declared_index + 1
+        try:
+            event = _build_event(path, lines, pending, citation_id)
+        except ValueError as exc:
+            for line_number in pending.source_lines:
+                unparsed.append(
+                    UnparsedLine(
+                        line_number=line_number, raw=lines[line_number - 1], reason=str(exc)
+                    )
+                )
+        else:
+            counters[population] += 1
+            events.append(event)
+        pending = None
+
+    for offset in range(events_at + 1, len(lines)):
+        line_number = offset + 1
+        raw = lines[offset]
+        if not raw.strip() or raw.strip().startswith("#"):
+            continue
+
+        fields = raw.split("|")
+        if len(fields) != 5:
+            flush()
+            unparsed.append(
+                UnparsedLine(
+                    line_number=line_number,
+                    raw=raw,
+                    reason=f"expected 5 pipe-delimited fields, found {len(fields)}",
+                )
+            )
+            expected_index = _resync(expected_index, fields[0] if fields else "")
+            continue
+
+        index_f, start_f, end_f, kind_f, body_f = (field.strip() for field in fields)
+
+        if not index_f:
+            if pending is None:
+                unparsed.append(
+                    UnparsedLine(
+                        line_number=line_number,
+                        raw=raw,
+                        reason="continuation line with no event above it",
+                    )
+                )
+                continue
+            if start_f or end_f or kind_f:
+                unparsed.append(
+                    UnparsedLine(
+                        line_number=line_number,
+                        raw=raw,
+                        reason="continuation must leave index, start, end and kind empty",
+                    )
+                )
+                continue
+            pending.fragments.append(body_f)
+            pending.source_lines.append(line_number)
+            continue
+
+        flush()
+
+        try:
+            declared_index = int(index_f)
+        except ValueError:
+            unparsed.append(
+                UnparsedLine(
+                    line_number=line_number, raw=raw, reason=f"index {index_f!r} is not an integer"
+                )
+            )
+            expected_index += 1
+            continue
+        if declared_index != expected_index:
+            unparsed.append(
+                UnparsedLine(
+                    line_number=line_number,
+                    raw=raw,
+                    reason=f"index {declared_index} is out of sequence; expected {expected_index}",
+                )
+            )
+            expected_index = declared_index + 1
+            continue
+
+        started_ms = _parse_timestamp(start_f)
+        ended_ms = _parse_timestamp(end_f)
+        if started_ms is None or ended_ms is None:
+            unparsed.append(
+                UnparsedLine(
+                    line_number=line_number,
+                    raw=raw,
+                    reason=f"timestamps must be M:SS.mmm; found {start_f!r} and {end_f!r}",
+                )
+            )
+            expected_index = declared_index + 1
+            continue
+        if ended_ms < started_ms:
+            unparsed.append(
+                UnparsedLine(
+                    line_number=line_number,
+                    raw=raw,
+                    reason=f"event ends ({end_f}) before it starts ({start_f})",
+                )
+            )
+            expected_index = declared_index + 1
+            continue
+        if kind_f not in EventKind.__members__:
+            unparsed.append(
+                UnparsedLine(
+                    line_number=line_number, raw=raw, reason=f"unknown event kind {kind_f!r}"
+                )
+            )
+            expected_index = declared_index + 1
+            continue
+
+        pending = _Pending(declared_index, started_ms, ended_ms, EventKind(kind_f), line_number)
+        pending.fragments.append(body_f)
+
+    flush()
+    frozen = tuple(events)
+    check_tool_pairing(path, frozen, tuple(unparsed))
+
+    return Call(
+        source_path=str(path),
+        record=record,
+        context=context,
+        context_source_lines=context_source_lines,
+        events=frozen,
+        unparsed=tuple(unparsed),
+    )

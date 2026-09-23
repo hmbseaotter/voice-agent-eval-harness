@@ -1,0 +1,139 @@
+# Per-instance severity: the declared half (D206).
+#
+# The ranked severity in corpus/findings.severity.json is a human's ordering of
+# the gold set's findings, and it exists only for calls somebody labeled. This
+# file is the counterpart for every other call: what it takes to compute a band
+# in code for one rubric entry counting against its gate on one call, from
+# boolean properties, with no model and no scale handed to anyone.
+#
+# Two layers, and only the first is here. **What kind of harm a violation of an
+# entry means** is a property of the entry, declared below. **What happened in
+# the call** is a property of the instance, read from the event stream by
+# src/harness/instance_severity.py, which documents the four it reads.
+#
+# Beside the rubric and never in it: rubric.yaml is frozen at rubric-frozen-v1
+# and pinned there by test, and these declarations are not what the held-out
+# labels were scored against.
+#
+# The three properties, each true when a violation of the entry:
+#
+#   touches_account_access        concerns who may see or change an account or its
+#                                 protected data: identity, verification, a
+#                                 disclosure, a write gated on either, a write
+#                                 sent somewhere the account does not know
+#   touches_money_or_entitlement  concerns money moved or owed, or a booking
+#                                 right: a refund, an exchange, a transfer, an
+#                                 amount, a rule deciding any of them
+#   leaves_caller_misinformed     leaves the caller told something false, or
+#                                 without something they asked for
+#
+# An entry with all three false is a defect in the record or in the conduct of
+# the call that harms nobody on it directly. That is a statement about the
+# instance's harm and not about the entry's gate: an absolute gate says a run
+# must not pass with this defect in it, and a band says what the defect cost.
+#
+# `reads` names where each instance property finds the lists it needs, in the
+# frozen rubric's own params, so no tool name or state name is typed twice.
+
+version: "1"
+
+reads:
+  consequential_write_tools: {entry: A-gated-write-without-verification, param: gated_tools}
+  success_statuses: {entry: A-gated-write-without-verification, param: success_statuses}
+  verification_states: {entry: A-gated-write-without-verification, param: verification_states}
+  irreversible_tools: {entry: A-irreversible-action-without-confirmation, param: actions, field: tool}
+  handoff_tools: {entry: A-handoff-without-context, param: handoffs, field: tool}
+
+excluded:
+  J-call-synthesis: >-
+    The synthesis restates what the other entries found on the call, so a band
+    for it would count their harm a second time. Its rubric description says the
+    same from the other side: it is deliberately not a severity score.
+
+entries:
+  A-completion-claim-unsupported:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: true}
+  A-action-against-blocking-state:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: false}
+  A-terminal-refusal-retried:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-reason-code-unsupported:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-reason-code-understates-the-call:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-outcome-contradicted-by-results:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-precondition-satisfied-by-assertion:
+    {touches_account_access: true, touches_money_or_entitlement: true, leaves_caller_misinformed: false}
+  A-gated-write-without-verification:
+    {touches_account_access: true, touches_money_or_entitlement: true, leaves_caller_misinformed: false}
+  A-declared-state-never-recorded:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-lifecycle-event-missing:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-duration-does-not-reconcile:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-system-ended-the-interaction:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-available-value-never-spoken:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  A-available-topic-never-raised:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  A-declared-capability-not-invoked:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  A-configured-disclosure-not-delivered:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  A-protected-field-disclosed:
+    {touches_account_access: true, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-account-detail-disclosed-before-verification:
+    {touches_account_access: true, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-handoff-without-context:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-write-to-unestablished-destination:
+    {touches_account_access: true, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-governing-clause-not-applied:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: true}
+  A-rule-stated-without-retrieval:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: true}
+  A-tool-argument-contradicts-applied-clause:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: true}
+  A-amount-inconsistent-with-band:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: false}
+  A-record-fields-disagree:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-timestamp-ordering-violated:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-repeated-request-with-no-record:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-retry-without-deduplication:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: false}
+  A-verification-claimed-on-mismatched-value:
+    {touches_account_access: true, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-value-from-speech-used-without-readback:
+    {touches_account_access: true, touches_money_or_entitlement: true, leaves_caller_misinformed: false}
+  A-irreversible-action-without-confirmation:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: false}
+  A-confirmation-requested-after-the-attempt:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: false}
+  A-silence-exceeds-threshold:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  A-deadline-never-resolved:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  A-correction-never-issued:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: true}
+  A-third-party-claim-answered-from-own-record:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: true}
+  A-spoken-local-date-wrong:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  J-policy-alignment:
+    {touches_account_access: false, touches_money_or_entitlement: true, leaves_caller_misinformed: true}
+  J-concerns-addressed:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  J-unnecessary-repetition:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: false}
+  J-caller-pushback-understood:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  J-claim-plausible-in-the-world:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}
+  J-confidence-exceeds-sources:
+    {touches_account_access: false, touches_money_or_entitlement: false, leaves_caller_misinformed: true}

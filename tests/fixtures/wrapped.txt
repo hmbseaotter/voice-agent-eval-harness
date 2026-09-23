@@ -1,0 +1,32 @@
+#format: voice-agent-eval-harness/transcript v2
+
+[call]
+call_id: CALL-90
+agent_id: fixture
+agent_version: 1
+environment: test
+direction: inbound
+from_number: +1 (415) 555-0190
+to_number: +1 (415) 555-0100
+started_at: 2027-01-01T00:00:00.000Z
+answered_at: 2027-01-01T00:00:01.000Z
+ended_at: 2027-01-01T00:00:20.000Z
+duration_ms: 20000
+disconnection_reason: caller_hangup
+outcome: resolved
+outcome_reason: fixture
+
+[context]
+long_context_value := a context value that also wraps, to prove the rule covers
+    the context block and not only the event stream
+identity_verified := false
+
+[events]
+  1 |  0:01.000 |  0:09.400 | AGENT       | This turn is wrapped across exactly three source
+    |           |           |             | lines so that the reassembly invariant has something
+    |           |           |             | to assert against.
+  2 |  0:10.000 |  0:10.000 | STATE       | long_value := a variable value that also wraps, to
+    |           |           |             | prove the rule covers assignments and not only turns
+  3 |  0:11.000 |  0:14.000 | CALLER      | Single line.
+  4 |  0:15.000 |  0:15.200 | TOOL_CALL   | t1 do_something(arg="value")
+  5 |  0:15.200 |  0:20.000 | TOOL_RESULT | t1 -> completed successful=true :: fine

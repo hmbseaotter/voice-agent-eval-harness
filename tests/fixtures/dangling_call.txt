@@ -1,0 +1,24 @@
+#format: voice-agent-eval-harness/transcript v2
+
+[call]
+call_id: CALL-94
+agent_id: fixture
+agent_version: 1
+environment: test
+direction: inbound
+from_number: +1 (415) 555-0192
+to_number: +1 (415) 555-0100
+started_at: 2027-01-01T00:00:00.000Z
+answered_at: 2027-01-01T00:00:01.000Z
+ended_at: 2027-01-01T00:00:30.000Z
+duration_ms: 30000
+disconnection_reason: caller_hangup
+outcome: resolved
+outcome_reason: fixture
+
+[context]
+# none
+
+[events]
+  1 |  0:01.000 |  0:01.200 | TOOL_CALL   | t1 do_something(arg="value")
+  2 |  0:02.000 |  0:05.000 | AGENT       | The result never arrives.

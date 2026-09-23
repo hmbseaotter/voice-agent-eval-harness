@@ -1,0 +1,152 @@
+#!/bin/sh
+# Two independent guards, both FAIL CLOSED:
+#
+#   SECRET GUARD   -- blocks a commit staging a populated `.env`.
+#   PRIVATE GUARD  -- blocks a commit staging anything under a top-level `private/`.
+#
+# WHY THIS FILE SHIPS IN THE REPOSITORY (D29)
+# -------------------------------------------
+# These are machine-level controls, not repository-level ones. Once
+# `core.hooksPath` is set machine-wide, a repo-local `.git/hooks/pre-commit`
+# NEVER FIRES (D14) -- so a repository cannot install its own enforcement by
+# committing a hook and hoping. A clone of this public repository otherwise
+# gets the `.gitignore` rules and none of the enforcement, while the
+# specification presents both as system properties.
+#
+# The build prompt's own rule is that an unverified guard is worse than none,
+# because it is relied upon. A guard a reader BELIEVES they have is that
+# hazard one step removed. So the source ships here, `hooks/README.md`
+# documents installation for both cases, and `tests/test_hooks.py` proves both
+# refusals by driving this file against a scratch repository.
+#
+# Deliberate bypass, if you really do mean it:  git commit --no-verify
+
+# ---------------------------------------------------------------------------
+# SHARED -- enumerate the staged paths once, and FAIL CLOSED if the
+# enumeration itself fails.
+#
+# This is the one behavioral difference from the reference implementation
+# these guards were derived from. There, a failed `git diff --cached` yielded
+# an empty result, which read as "nothing staged" and ALLOWED the commit --
+# fail-open, in a guard whose entire posture is fail-closed. The specification
+# requires that an unresolvable staged path blocks rather than allows, so the
+# exit status is checked rather than discarded.
+#
+# Safe against a repository's FIRST commit: `git diff --cached` compares the
+# index against the empty tree when HEAD does not yet exist and exits 0
+# (verified against git 2.54). A non-zero status here means a genuine failure
+# -- not a work tree, unreadable index -- which is exactly the case that must
+# block.
+# ---------------------------------------------------------------------------
+staged=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
+enum_status=$?
+if [ "$enum_status" -ne 0 ]; then
+  {
+    echo "STAGED-ENUMERATION-FAILED status=$enum_status"
+    echo ""
+    echo "  ====================================================="
+    echo "  PRE-COMMIT BLOCKED -- could not enumerate staged paths."
+    echo ""
+    echo "  Both guards below need this list to decide anything. With no"
+    echo "  list, neither can say the commit is safe -- so it blocks."
+    echo "  A missed credential is not recoverable by re-running anything."
+    echo "  ====================================================="
+    echo ""
+  } 1>&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# SECRET GUARD
+#
+# A `.gitignore` entry is the primary control, but it can be absent, edited,
+# or bypassed with `git add -f`; this is the backstop. A credential reaches
+# the remote at `git push`, long before anything is published deliberately,
+# and public repositories are scraped continuously -- treat any pushed secret
+# as compromised and rotate it.
+#
+# Threshold 20 bytes: a populated API-key line runs ~100-130 bytes, while a
+# committed template is typically ~40. The basename is matched EXACTLY as
+# ".env", so .env.example / .env.sample / .env.template commit normally.
+#
+# Fails CLOSED: a staged blob whose size cannot be determined is treated as
+# oversized rather than waved through.
+# ---------------------------------------------------------------------------
+secret_blocked=0
+env_staged=$(printf '%s\n' "$staged" | grep -E '(^|/)\.env$' || true)
+if [ -n "$env_staged" ]; then
+  OLDIFS=$IFS
+  IFS='
+'
+  for f in $env_staged; do
+    size=$(git cat-file -s ":$f" 2>/dev/null)
+    case "$size" in ''|*[!0-9]*) size=999999 ;; esac   # unreadable -> fail CLOSED
+    [ "$size" -gt 20 ] || continue
+    {
+      echo "SECRET-GUARD-BLOCKED file=$f size=$size"
+      echo ""
+      echo "  ====================================================="
+      echo "  PRE-COMMIT BLOCKED -- staged '$f' is $size bytes (limit 20)."
+      echo "  A populated .env almost certainly holds a live credential."
+      echo ""
+      echo "    Unstage it :  git restore --staged $f"
+      echo "    Ignore it  :  echo '.env' >> .gitignore"
+      echo ""
+      echo "  Only a file named exactly '.env' is checked, so templates such"
+      echo "  as .env.example are unaffected and commit normally."
+      echo "  ====================================================="
+      echo ""
+    } 1>&2
+    secret_blocked=1
+  done
+  IFS=$OLDIFS
+fi
+[ "$secret_blocked" -eq 0 ] || exit 1
+
+# ---------------------------------------------------------------------------
+# PRIVATE-DIRECTORY GUARD
+#
+# `private/` holds material whose publication is undecided -- build logs,
+# drafts, the clean-room source register. A `.gitignore` entry is the primary
+# control; it is advisory, and `git add -f` walks straight through it.
+#
+# Why this matters more than it looks: a repository built private and later
+# flipped public publishes its history RETROACTIVELY. Deleting a file before
+# the flip does not help -- the earlier commit is still there. So the moment
+# to catch publication-deferred material is the commit, not the flip. A guard
+# added in week three does not protect week one.
+#
+# TOP-LEVEL ONLY, on purpose -- the pattern is `^private/`, not `private/` at
+# any depth. `src/private/` and `app/private/` are ordinary source directories
+# in plenty of codebases, and a guard that blocks them gets routinely bypassed
+# with --no-verify -- which would disable the secret guard above at the same
+# time. Guarding the documented convention (repository-root `private/`) covers
+# the real threat without training anyone to skip the hook.
+#
+# Stated explicitly because the specification's criterion reads "a staged path
+# under `private/`" without qualifying depth, and a reader should not have to
+# infer the scoping from the regex.
+# ---------------------------------------------------------------------------
+private_staged=$(printf '%s\n' "$staged" | grep -E '^private/' || true)
+if [ -n "$private_staged" ]; then
+  {
+    echo "PRIVATE-GUARD-BLOCKED"
+    echo ""
+    echo "  ====================================================="
+    echo "  PRE-COMMIT BLOCKED -- staged path(s) under 'private/':"
+    echo ""
+    printf '%s\n' "$private_staged" | sed 's/^/    /'
+    echo ""
+    echo "  'private/' holds material whose publication is undecided."
+    echo "  A private repo flipped public publishes its history too, so"
+    echo "  committing this now decides the question by default."
+    echo ""
+    echo "    Unstage :  git restore --staged <path>"
+    echo "    Ignore  :  echo 'private/' >> .gitignore"
+    echo "  ====================================================="
+    echo ""
+  } 1>&2
+  exit 1
+fi
+
+exit 0

@@ -1,0 +1,3604 @@
+# The mutation that drives each control red.
+#
+# A row in CONTROL-REGISTER.md saying `connected` is a claim, and a claim in a
+# document is exactly what this project keeps finding to have gone stale. An
+# entry here turns that claim into something re-derived: `tools/verify_controls.py`
+# copies the repository, applies the mutation to the copy, and requires the named
+# control to FAIL there and to PASS without it. A control that cannot be driven
+# both ways has been proven against nothing.
+#
+# `find` must match exactly one WHOLE line in `file`; the tool refuses the entry
+# otherwise, because a mutation that lands in two places is not the defect it
+# names, and one that lands nowhere is the fail-open this whole exercise exists
+# to find. Keep the leading indentation inside the quotes -- stripping it gives a
+# `find` that matches nothing, which this file has already done once.
+#
+# This is a LIST, not a mapping keyed by control name, because
+# `test_every_traced_finding_is_on_a_call_the_entry_fires_on` exists in two
+# modules under the same name and a mapping silently kept one of them. `file` is
+# what separates them, and the tool runs the control as `<file>::<name>` when
+# that file defines it.
+#
+# Not every control has an entry. The register's `unaudited` rows are the ones
+# nobody has driven either way, and their absence here is the honest form of that.
+
+controls:
+  - control: test_the_control_character_sweep_would_notice_one
+    file: tests/test_acceptance.py
+    defect: >-
+      The extension filter matches nothing, so the sweep reads no file and passes
+      over a tree full of control characters. This is the mode the control claimed
+      to catch and did not: it recomputed the detection expression on a literal of
+      its own instead of driving the sweep.
+    find: '_SWEPT: Final[frozenset[str]] = frozenset({".py", ".md", ".yaml", ".yml", ".toml", ".txt", ".cfg"})'
+    replace: '_SWEPT: Final[frozenset[str]] = frozenset({".nothing-matches-this"})'
+
+  - control: test_the_anchor_check_would_notice_a_moved_event
+    file: tests/test_corpus_hygiene.py
+    defect: >-
+      The per-row anchor comparison can never report a problem, so a manifest that
+      no longer describes the corpus passes. The control asserted properties of the
+      corpus beside the check and never executed this comparison.
+    find: '    return problems'
+    replace: '    return []'
+
+  - control: test_the_leak_scan_would_notice_a_turn_that_was_in_the_corpus
+    file: tests/test_context_seam.py
+    defect: >-
+      The leak comparison can never report a leak, so agent speech present in the
+      grounding corpus reads as absence. The control was a tautology -- it built
+      `corpus + turn` and asserted the turn was in it, true for every corpus.
+    find: '    return leaked'
+    replace: '    return []'
+
+  - control: test_the_register_guard_would_notice_an_unregistered_control
+    file: tests/test_document_counts.py
+    defect: >-
+      The register is read as naming no controls at all, so the guard compares the
+      idiom against an empty set. A register parsed to nothing would otherwise make
+      every row look present.
+    find: '    return _test_names_in(CONTROL_REGISTER.read_text(encoding="utf-8")) - modules'
+    replace: '    return set()'
+
+  - control: test_the_mutation_spec_would_notice_an_anchor_that_moved
+    file: tests/test_document_counts.py
+    defect: >-
+      No mutation anchor can ever be reported stale, so a `find` that a formatter
+      has moved passes unnoticed and the replay gate quietly stops verifying. The
+      first version of this control re-counted a list it had built itself and
+      passed with this defect in place -- the register's own guard carrying the
+      shape the register exists to find.
+    find: '        hits = lines.count(body["find"].rstrip())'
+    replace: '        hits = 1'
+
+  - control: test_every_traced_finding_is_on_a_call_the_entry_fires_on
+    file: tests/test_conduct_checks.py
+    defect: >-
+      EXPECTED_FIRING is read as empty, so the loop never runs and the assertion
+      passes having compared nothing. Not a control but a consistency assertion,
+      and it had no floor at all: it passed over an empty table until this audit
+      gave it one, while its neighbors in the same file carried floors.
+    find: '    for entry_id, (expected, findings) in EXPECTED_FIRING.items():'
+    replace: '    for entry_id, (expected, findings) in {}.items():'
+
+  - control: test_every_traced_finding_is_on_a_call_the_entry_fires_on
+    file: tests/test_record_checks.py
+    defect: >-
+      The same missing floor, in the second of the two modules carrying this test
+      name. A mapping keyed on the control name kept only one of these two entries,
+      which is why this file is a list.
+    find: '    for entry_id, (expected, findings) in EXPECTED_FIRING.items():'
+    replace: '    for entry_id, (expected, findings) in {}.items():'
+
+  - control: test_every_traced_finding_is_assert_detectable_and_on_a_call_the_entry_fires_on
+    file: tests/test_omission_checks.py
+    defect: >-
+      EXPECTED_FIRING is read as empty, so neither the assert-detectable claim nor
+      the firing claim is compared against anything, and the assertion passes.
+    find: '    for entry_id, (expected, findings) in EXPECTED_FIRING.items():'
+    replace: '    for entry_id, (expected, findings) in {}.items():'
+
+  - control: test_the_spy_would_notice_a_connection
+    file: tests/test_cli.py
+    defect: >-
+      The spy patches every route to a socket but records nothing, so the assertion
+      that the list stayed empty is satisfied by a spy that never fills it. The
+      check passes over this; the control is the only thing that fires.
+    find: '            opened.append(name)'
+    replace: '            pass'
+
+  - control: test_the_event_scoped_check_fires_on_a_door_time_its_titles_agree_with
+    file: tests/test_corpus_hygiene.py
+    defect: >-
+      The event-scoped comparison reports no disagreement whatever the corpus says.
+      The check passes over it; again the control is the only thing that fires.
+    find: '    return problems, compared'
+    replace: '    return [], compared'
+
+  - control: test_the_measurement_scan_fires_on_an_undated_unbound_number
+    file: tests/test_corpus_hygiene.py
+    defect: >-
+      The marker matches nothing, so the scan reads no stated measurement anywhere
+      and reports a clean tree.
+    find: '    r"Measured(?:\s+[\w\s]{0,40}?)?:"'
+    replace: '    r"ThisMarkerMatchesNothingAtAll:"'
+
+  - control: test_the_matched_by_check_fires_when_the_register_names_the_wrong_call
+    file: tests/test_corpus_hygiene.py
+    defect: >-
+      The comparison is weakened from equality to a superset test, which is what
+      lets the register name an extra call. Before the repair, the check and the
+      control both stayed green on this.
+    find: '    if named == exceptional:'
+    replace: '    if named >= exceptional:'
+
+  - control: test_the_escalation_convention_check_fires_on_the_field_that_was_got_wrong
+    file: tests/test_corpus_hygiene.py
+    defect: >-
+      The convention comparison can never report a violation, so a corpus that
+      stopped carrying the escalation convention passes. Before the repair, the
+      check and the control both stayed green on this.
+    find: '    return {call_id: fields for call_id, fields in escalated.items() if fields != ESCALATION_RECORD}'
+    replace: '    return {}'
+
+  - control: test_the_policy_tool_binding_would_notice_a_rename
+    file: tests/test_corpus_hygiene.py
+    defect: >-
+      The register is read as declaring no names at all, so every hardcoded
+      policy-tool constant is compared against an empty set. That is the rename this
+      check exists for.
+    find: '    return set(re.findall(r"`([a-z_][a-z0-9_.]*)`", section))'
+    replace: '    return set()'
+
+  - control: test_the_enumeration_check_fires_on_the_call_that_actually_went_missing
+    file: tests/test_document_counts.py
+    defect: >-
+      The enumeration stops reading call ids out of the sentence, so a call that
+      went missing from it cannot be noticed.
+    find: '    return ids | set(re.findall(r"CALL-\d{2}", sentence))'
+    replace: '    return ids'
+
+  - control: test_the_recall_net_fires_on_a_count_nobody_declared
+    file: tests/test_document_counts.py
+    defect: >-
+      The net recognizes none of its nouns, so a worded count in live prose matches
+      nothing and the net reports a clean tree. Every failure this net was written
+      after had that shape: a strict checker ran, matched nothing, and reported
+      success.
+    find: '    + "|".join(_NET_NOUNS)'
+    replace: '    + "|".join(["zzzz_no_such_noun"])'
+
+  - control: test_the_tag_check_fires_on_a_number_that_disagrees_with_its_tag
+    file: tests/test_document_counts.py
+    defect: >-
+      The tag extraction records no sites, so no tagged quantity is compared against
+      the number written in front of it.
+    find: '        sites.append((relative, match.group(1), numbers[-1].lower()))'
+    replace: '        pass'
+
+  - control: test_the_retired_term_check_fires_on_a_term_the_spec_retired
+    file: tests/test_document_counts.py
+    defect: >-
+      The retired-term marker matches nothing, so no term the specification says it
+      retired is looked for anywhere.
+    find: '_RETIRED_TERM: Final[re.Pattern[str]] = re.compile(r''Retargeted from "([^"]+)"'')'
+    replace: '_RETIRED_TERM: Final[re.Pattern[str]] = re.compile(r"MatchesNothingAtAll")'
+
+  - control: test_the_name_check_fires_on_an_invented_test_and_rejoins_a_wrapped_one
+    file: tests/test_document_counts.py
+    defect: >-
+      The name extraction finds no test names in any prose, so every document naming
+      a mechanism that does not exist passes unremarked.
+    find: '    return set(re.findall(r"\b(test_[a-z0-9_]+)\b", re.sub(r"_\r?\n\s*", "_", text)))'
+    replace: '    return set()'
+
+  - control: test_the_check_would_catch_a_slowed_transcript
+    file: tests/test_speech_plausibility.py
+    defect: >-
+      The rate measurement returns None for every utterance, so the plausibility
+      band is compared against an empty list of rates and the corpus reads as clean.
+      This control's own docstring records it being repaired from that shape once
+      already.
+    find: '    return words / seconds * 60.0'
+    replace: '    return None'
+
+  - control: test_a_state_written_before_the_handoff_does_not_satisfy_required_state_after
+    file: src/harness/checks/omission.py
+    control_file: tests/test_omission_checks.py
+    defect: >-
+      The ordering is dropped: a state written BEFORE the handoff now satisfies a
+      requirement about the state AFTER it. `after` is the parameter's own word, and
+      this comparison is what makes it mean anything -- D117's shape exactly.
+    find: '                    if index > invocation.call.index'
+    replace: '                    if True'
+
+  - control: test_a_variable_set_between_the_asks_clears_it_even_if_set_again_after
+    file: src/harness/checks/records.py
+    control_file: tests/test_record_checks.py
+    defect: >-
+      Last write wins: only the most recent write to the variable is considered, so a
+      write made BETWEEN the two asks is forgotten the moment a later one exists.
+      D117 records that shape costing a false violation on an absolute gate.
+    find: '                for index in recorded.get(str(variable), ())'
+    replace: '                for index in recorded.get(str(variable), ())[-1:]'
+
+  - control: test_a_deduplication_key_would_clear_the_retry
+    file: src/harness/checks/records.py
+    control_file: tests/test_record_checks.py
+    defect: >-
+      The declared deduplication arguments are read as an empty list, so no argument
+      can ever mark a re-issue as deduplicated and the parameter is not consulted at
+      all.
+    find: '    dedup = [str(name) for name in params["deduplication_arguments"]]'
+    replace: '    dedup = []'
+
+  - control: test_w10_a_state_cleared_before_the_action_is_not_a_violation
+    file: src/harness/checks/claims.py
+    control_file: tests/test_claim_checks.py
+    defect: >-
+      The blocking VALUE is no longer compared: any write to the gating variable
+      blocks the tool, whatever it was set to. The control clears the gate to `true`
+      before the action and requires the violation to go, so a check that ignores the
+      value keeps reporting one.
+    find: '            if _fold(value, fold_case) == blocking_value:'
+    replace: '            if True:'
+
+  - control: test_a_hedge_in_the_stating_turn_does_not_resolve_the_deadline
+    file: src/harness/checks/matching.py
+    control_file: tests/test_conduct_checks.py
+    defect: >-
+      The declared-name boundary is dropped and signals match as bare substrings,
+      which is D115's defect: `may` inside `maybe`, and the resolution signals for
+      the deadline entry are the twelve month names. A hedge then reads as a
+      resolved deadline.
+    find: '        if re.search(rf"{_BOUNDARY}{re.escape(needle)}(?![\w''])", haystack):'
+    replace: '        if needle in haystack:'
+
+  - control: test_a_word_list_would_have_fired_on_three_turns_a_phrase_list_does_not
+    file: rubric.yaml
+    control_file: tests/test_claim_checks.py
+    defect: >-
+      A phrase in the completion-claim signal list is replaced by a bare word, which
+      is the word list the entry deliberately does not use. `moved` then fires on
+      CALL-19, where the promoter moved the event and the agent moved nothing.
+    find: '            - "i''ve moved you"'
+    replace: '            - "moved"'
+
+  - control: test_mutating_a_declared_parameter_moves_a_verdict
+    file: src/harness/checks/claims.py
+    control_file: tests/test_claim_checks.py
+    defect: >-
+      The declared success statuses stop being compared, so any tool result counts as
+      a success. `success_statuses` is then a parameter the check does not read,
+      whatever the YAML beside it says -- which is the criterion this control exists
+      to assert per parameter rather than once.
+    find: '                and invocation.result.status.value in success_statuses'
+    replace: '                and True'
+
+  - control: test_adding_the_supporting_sentence_to_speech_alone_does_not_move_the_verdict
+    file: src/harness/checks/policy.py
+    control_file: tests/test_policy_checks.py
+    defect: >-
+      A clause counts as applied when its text appears in an agent turn -- the
+      grounding blob that concatenates speech alongside the three ground-truth
+      sources. The claim is then resolved against the claim that made it, which is
+      the seam this control guards and the half D104's criterion cannot see.
+    find: "        (event.document, event.clause) for event in context.events if isinstance(event, PolicyEvent)"
+    replace: "        (event.document, event.clause) for event in context.events if isinstance(event, PolicyEvent)\n    } | {\n        (document.name, clause_id)\n        for document in context.retrieved_policies\n        for clause_id, clause_text in document.clauses\n        if any(clause_text in turn.text for turn in context.subject.agent_turns)"
+
+  - control: test_the_gate_refuses_to_write_bytecode_and_to_copy_a_stale_cache
+    file: tools/verify_controls.py
+    control_file: tests/test_verify_controls.py
+    defect: >-
+      The gate writes bytecode again, so the cache its own unmutated run leaves
+      behind can be read instead of the mutated source. That masks exactly the
+      mutations that preserve the file size, and it reported two connected controls
+      as measuring nothing.
+    find: "    environment[\"PYTHONDONTWRITEBYTECODE\"] = \"1\""
+    replace: "    pass"
+
+  # ------------------------------------------------------------------------
+  # Phase 3: the model transport seam and the judged tier.
+  #
+  # Every mutation below is in `src/`, so each entry carries a `control_file`.
+  # Three of them restore a defect that was real in this phase rather than a
+  # hypothetical one -- the partial-results loss, the unpriced-model estimate
+  # of zero, and the module-scope SDK import that D122 exists to prevent.
+  # ------------------------------------------------------------------------
+
+  - control: test_the_repetitions_obtained_before_an_abort_are_not_discarded
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      A transport failure part-way through a call's repetitions discards the
+      repetitions already completed, so the run reports fewer results than its
+      own run log holds -- `RecordingTransport` has already written them. This
+      was the shipped behavior until a CLI replay test reported `results: 0`
+      over a log holding one entry.
+    find: '            raise JudgedCallAborted(exc, outcomes) from exc'
+    replace: '            raise JudgedCallAborted(exc, []) from exc'
+
+  - control: test_mutating_each_judged_field_changes_what_is_sent
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The generation configuration is written at the call site instead of read
+      from the rubric entry, so `model`, `max_tokens` and `effort` become
+      values in the YAML that describe nothing. W20 in the judged tier, which
+      is the tier with no `ParamView` to catch it.
+    find: '        config=GenerationConfig(model=spec.model, max_tokens=spec.max_tokens, effort=spec.effort),'
+    replace: '        config=GenerationConfig(model="claude-sonnet-5", max_tokens=2048, effort="high"),'
+
+  - control: test_an_unpriced_model_refuses_rather_than_estimating_zero
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      A model with no published rate is costed at zero rather than refused, so
+      a live run of any size prints `$0.00` at the one moment a human is being
+      asked to agree to the spend. This was the first draft, as
+      `PRICING_USD_PER_MTOK.get(model, (0.0, 0.0))`.
+    find: '    raise UnpricedModelError(model)'
+    replace: '    return (0.0, 0.0)'
+
+  - control: test_the_replay_path_does_not_import_the_sdk
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The SDK import moves from `LiveTransport.__init__` to module scope, so
+      every replay run -- and the deterministic tier, which imports the CLI --
+      loads it. D122's condition is that the tier runs key-free, and this is
+      the one-line change that would quietly end it.
+    find: 'if TYPE_CHECKING:  # pragma: no cover - imported for annotations only'
+    replace: 'if True:  # the deferred import becomes a real one'
+
+  - control: test_the_run_log_carries_no_credential_that_was_in_the_prompt
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The scrubber matches nothing, so a credential that reached a prompt
+      reaches the run log verbatim. The requirement is that credential values
+      are excluded from every log, report and error message, and this is what
+      its absence looks like.
+    find: '        if len(value) >= MINIMUM_CREDENTIAL_LENGTH:'
+    replace: '        if len(value) >= 1_000_000_000:'
+
+  - control: test_the_ceiling_is_a_number_of_calls_issued_and_not_that_number_plus_one
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The ceiling admits one call past its limit. An off-by-one here is the
+      difference between a budget and a budget plus one call, on a run whose
+      calls each carry a whole transcript.
+    find: '        if self._issued >= self._ceiling:'
+    replace: '        if self._issued > self._ceiling:'
+
+  - control: test_a_refused_call_is_not_recorded_because_it_did_not_happen
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The same off-by-one, driving the other property it breaks: the call the
+      ceiling should have refused is issued and therefore recorded, so the run
+      log carries an entry for a call the ceiling reported refusing. Two
+      controls for one defect, and the register says so rather than letting the
+      second look independently proven.
+    find: '        if self._issued >= self._ceiling:'
+    replace: '        if self._issued > self._ceiling:'
+
+  - control: test_each_population_is_validated_against_its_own_set_and_not_the_union
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_prompt.py
+    defect: >-
+      A fact citation is validated against every rendered identifier's number
+      rather than against the fact population, so `[F9]` on a call with twelve
+      transcript lines and two facts is accepted because `T9` exists. That is
+      W1's shape exactly: a validator checking against a universe wider than
+      the one the prompt rendered.
+    find: '            valid = identifier in universe.facts'
+    replace: '            valid = any(o[1:] == identifier[1:] for o in universe.all_identifiers)'
+
+  # ------------------------------------------------------------------------
+  # Three mechanisms that replaced non-systematic verification, 2026-09-09.
+  # Each closed a caveat in `tools/verify_phase3.py` that said a property was
+  # stated in prose, or asserted by an enumeration rather than by a rule.
+  # ------------------------------------------------------------------------
+
+  - control: test_the_sdk_retry_count_is_zero_so_our_backoff_replaces_it
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The SDK's own retries are left at their default, so this project's backoff
+      WRAPS them instead of replacing them. Two mechanisms layered multiply the
+      wall-clock cost of every failure across a run of a thousand calls and make
+      `transport_attempts` in the run log describe one of the two. The
+      specification requires the posture to be stated; it was stated in prose
+      and read by nothing until this control.
+    find: 'SDK_RETRIES: Final[int] = 0'
+    replace: 'SDK_RETRIES: Final[int] = 2'
+
+  - control: test_the_retry_loop_sleeps_the_declared_schedule_and_not_after_the_last_try
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The loop sleeps after its final attempt as well, spending the full backoff
+      delay to reach the giving-up it had already decided on. The schedule was
+      previously unasserted on the grounds that checking it would mean a test
+      that waits -- which was wrong: the sleeps are a sequence of requested
+      delays, and a recorder captures them in no time at all.
+    find: '                if attempt < MAX_TRANSPORT_ATTEMPTS:'
+    replace: '                if attempt <= MAX_TRANSPORT_ATTEMPTS:'
+
+  - control: test_every_judged_field_has_a_declared_mutation
+    file: src/harness/core/rubric.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      A `JudgeSpec` field is renamed and the test that exercises it is not,
+      which is the shape the coverage guard exists for: the mutation test
+      covered all eight fields by a hand-written list, so a ninth field -- or a
+      renamed one -- would have failed nothing. `ParamView` buys this for the
+      deterministic tier on every run; a judged entry has no `params`, so the
+      rule is read off `dataclasses.fields` instead.
+    find: '    effort: str'
+    replace: '    effort_level: str'
+
+  - control: test_the_register_guard_would_notice_an_unregistered_obligation
+    file: tests/test_obligations.py
+    defect: >-
+      The harvest reads no handover at all, so the obligations register compares
+      its rows against an empty population -- every row looks orphaned and every
+      owed item looks registered. That is the fail-open this register exists to
+      remove, arriving in the register's own guard: a rule that harvests nothing
+      is a list again, and a list nobody maintains is the reading it replaced.
+    find: '    for path in sorted(SESSIONS.glob("HANDOVER-*.md")):'
+    replace: '    for path in sorted(SESSIONS.glob("NO-SUCH-HANDOVER-*.md")):'
+
+  - control: test_a_live_transport_with_no_credential_in_reach_refuses
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The lookup returns an empty credential instead of refusing, so the harness
+      no longer requires one: `anthropic.Anthropic(api_key="")` constructs, the
+      operator confirms the spend, and the 401 arrives from the provider one
+      call later. The requirement names the harness. Nothing in the suite drove
+      this refusal -- the only test naming `CredentialMissingError` constructed
+      the exception and read its message -- so removing it left all 159
+      judged-tier tests green while verifier criterion 18 ticked.
+    find: '    raise CredentialMissingError()'
+    replace: '    return CREDENTIAL_VARIABLES[0], ""'
+
+  - control: test_the_credential_lookup_reads_both_routes_and_refuses_only_when_both_are_empty
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      Same defect, seen at the named function rather than through the
+      transport. Two entries because the requirement has two callers now: the
+      CLI asks before it prints an estimate and the transport asks before it
+      builds a client, and a refusal that only one of them could reach is the
+      arrangement this replaced.
+    find: '    raise CredentialMissingError()'
+    replace: '    return CREDENTIAL_VARIABLES[0], ""'
+
+  - control: test_live_mode_requires_a_credential_before_it_prints_an_estimate
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The credential is not checked until the transport is constructed, which
+      the CLI reaches only after printing the estimate and taking the
+      confirmation. The run still exits 2, so the mutation is invisible to an
+      exit-code assertion -- what fails is the ORDER: an operator with no key
+      is asked to approve spend they cannot make. The requirement states the
+      three clauses in the order they have to happen in.
+    find: '            resolve_credential(root)'
+    replace: '            pass  # resolve_credential(root)'
+
+  - control: test_no_scrubbed_field_of_a_run_log_entry_carries_a_credential
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The model's own response text is written to the run log unscrubbed. Three
+      of the four scrubbed fields could be removed one at a time with the whole
+      judged-tier suite staying green: the only test planted its key in the
+      PROMPT, and the committed-artifact scan is the right instrument for the
+      artifact and says nothing about a writer that would leak into a new log.
+      `response_text` is the likeliest of the four to carry a stray secret,
+      because it is the model's text rather than this project's.
+    find: '            "response_text": scrub_credentials(self.response.text, credentials),'
+    replace: '            "response_text": self.response.text,'
+
+  - control: test_both_credential_values_are_scrubbed_when_the_two_disagree
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      One value per name again, the exported one winning -- which is right for
+      authentication and wrong for scrubbing, and the two used to read the same
+      mapping. A leftover key in `.env` that an exported variable overrode then
+      never reaches the scrubber, and the module's docstring said the opposite.
+      The test named for this case put the two values under two different
+      variable names, so nothing disagreed and it was green on a neighbor.
+    find: '        for value in (environment.get(name, ""), from_file.get(name, "")):'
+    replace: '        for value in (environment.get(name, "") or from_file.get(name, ""),):'
+
+  - control: test_a_credential_that_contains_another_is_redacted_whole
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The scrub order is whatever the variables were declared in rather than
+      longest first, so a value that contains another is redacted in two pieces
+      and the longer one's tail survives -- beside a redaction token that reads
+      as though the job was done.
+    find: '    return tuple(sorted(seen, key=len, reverse=True))'
+    replace: '    return tuple(seen)'
+
+  - control: test_a_token_from_the_alternative_variable_travels_under_the_bearer_header
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      A bearer token is passed as `api_key`, which the SDK sends as `X-Api-Key`
+      rather than `Authorization: Bearer`. `.env.example` offers that variable
+      as an alternative, so the documented route produced a 401 and no message
+      saying why -- a documented route that cannot work being worse than one
+      that is not documented.
+    find: '        if variable == "ANTHROPIC_AUTH_TOKEN":'
+    replace: '        if False:'
+
+  - control: test_a_judged_run_with_only_some_results_errored_still_reports_the_tier_incomplete
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A judged run carrying errored or unevaluable results exits on the gate
+      rather than on the tier. D114 gives 3 its meaning -- a tier that could
+      not be completed is not a finding about the agent.
+
+      **This mutation pointed at the wrong test until D143.** Its old target
+      asserted a run where EVERY result errored, which also makes every
+      dimension `measured_nothing` -- so the second exit-3 guard fired and
+      removing this one changed nothing. The control reported green and the
+      sweep reported the control as measuring nothing, correctly. Its target
+      now fabricates a citation on one call: the errored count is non-zero
+      while every dimension keeps verdicts from the other fifteen, which is
+      the only shape this guard catches alone.
+    find: '    if judged_errored or judged_unevaluable:'
+    replace: '    if False:'
+
+  - control: test_a_judged_run_the_transport_aborts_exits_three_and_says_what_it_obtained
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A run the transport aborted part-way exits 0, reporting whatever it
+      obtained as though the tier had run. The partial results are in the log
+      either way, which is what makes the silence expensive: the artifact says
+      one thing and the exit code says another.
+    find: '    if judged.aborted:'
+    replace: '    if False:'
+
+  - control: test_a_retry_truncated_at_max_tokens_is_reported_as_truncation
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The retry leg skips the stop-reason classification the first attempt gets,
+      so a retry cut off at the token ceiling is parsed anyway and resolves to
+      "retry budget exhausted ... not valid JSON" while the run log carries
+      `max_tokens` two lines away. Both legs reach `errored`, which is what hid
+      it: the status was right and the reason was wrong, and the requirement is
+      that truncation is distinguishable from a validation failure.
+    find: '    if retry_response.stop_reason == STOP_MAX_TOKENS:'
+    replace: '    if False:'
+
+  - control: test_a_response_carrying_no_stop_reason_is_not_read_as_a_complete_answer
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      A response with no stop reason is read as "not a refusal, not a
+      truncation" and parsed into a verdict, so a response of unknown
+      completeness produces an `applicable` result. The criterion "every
+      run-log entry carries a stop_reason; the count missing one is zero" is
+      about the artifact, and was asserted over committed logs while the engine
+      treated a missing one as ordinary.
+    find: '    if not response.stop_reason:'
+    replace: '    if False:'
+
+  - control: test_a_malformed_answer_is_corrected_in_its_own_words_not_an_empty_citation_list
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      One correction wording for two causes. A response that did not parse has
+      no rejected identifiers to quote, so the retry read "Your previous answer
+      cited identifiers that were not in this prompt: ." -- an empty list, which
+      tells a model nothing while looking like it had.
+    find: '    if rejected:'
+    replace: '    if True:'
+
+  - control: test_the_preflight_estimate_brackets_what_the_real_run_recorded
+    file: src/harness/cli.py
+    control_file: tests/test_reference_run.py
+    defect: >-
+      The characters-per-token divisor goes back to the value reasoned from
+      English prose. Against the committed log the estimate then comes in below
+      every recorded input count, on all sixteen calls, by 1.30 to 1.37 -- so
+      the number a human approves a spend against is smaller than the one they
+      are billed for. The total stayed a ceiling only because the output side is
+      bounded at `max_tokens`, which is luck rather than design.
+    find: '_CHARS_PER_TOKEN: Final[float] = 2.4'
+    replace: '_CHARS_PER_TOKEN: Final[float] = 3.5'
+
+  - control: test_every_register_row_still_points_at_the_obligation_it_was_written_for
+    file: tests/test_obligations.py
+    defect: >-
+      Every owed heading is renamed under its number, which is the state this
+      guard exists to detect and which the register's key -- (handover, item
+      number) -- cannot see. An audit did exactly this to one heading and
+      watched all ten tests stay green.
+      The first mutation written for this entry deleted the comparison instead
+      (`if anchor not in title:` -> `if False:`) and the control stayed green,
+      correctly: with no drifted row in the register there is nothing for the
+      comparison to find either way. A control has to be driven by a defect
+      that produces a difference, not by removing the code that would report
+      one.
+    find: '            found[(path.name, number)] = title.strip()'
+    replace: '            found[(path.name, number)] = "a different obligation, same number"'
+
+  - control: test_a_closed_phase_handover_requires_the_sweep_marker_to_have_reached_it
+    file: tests/test_document_counts.py
+    defect: >-
+      The scan finds no closed handover, so the phase-completion clause compares
+      against an empty population and the sweep trigger is unobserved again --
+      which is the state it was in for two whole phases. A floorless comparison
+      passing over nothing is the shape D121 found in three assertions in this
+      suite.
+    find: '        if not _STATUS_CLOSED.search(text):'
+    replace: '        if True:'
+
+  - control: test_the_count_the_summary_prints_separates_criteria_from_requirement_prose
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      Every anchored entry is counted as an acceptance criterion, which is what
+      the phase-3 verifier printed: 21 where the specification carries 18. Three
+      of its anchors point into requirement prose. Phases 1 and 2 each had a
+      test binding their list to the document and phase 3 had none, so the
+      overstatement shipped.
+    find: '        if (stripped := line.strip()).startswith(("- [ ] ", "- [x] "))'
+    replace: '        if True'
+
+  - control: test_a_failing_control_is_not_mistaken_for_one_that_could_not_run
+    file: tools/verify_controls.py
+    defect: >-
+      The gate refuses any run whose output contains the substring `ERROR`. That
+      is a substring of anything a failing assertion prints, and one of this
+      project's own status values is `Status.ERRORED` -- so a control that drove
+      red correctly, over a result whose status was `errored`, is reported as
+      unrunnable and stops the sweep. A red that is not a finding,
+      indistinguishable from one that is, in the code whose whole job is telling
+      those two apart.
+    find: '    return bool(re.search(r"^ERROR\b", output, re.MULTILINE))'
+    replace: '    return "ERROR" in output'
+
+  - control: test_one_string_sent_n_times_is_stored_once_and_referenced_n_times
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      Every call record carries its own copy of what was sent, which is the v1
+      format: one 3,333-character system prompt written 160 times, and a file
+      eight times its own unique content. The writer still emits blob records,
+      so a check that only looked for them would pass -- what moves is the
+      number of stored copies, which is the thing D128 decided.
+    find: '            if digest not in self._blobs'
+    replace: '            if True'
+
+  - control: test_a_blob_is_written_before_the_record_that_references_it
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The call record is written ahead of the blobs it names. Every blob is
+      still written and a completed run still reads back correctly, so nothing
+      about a tidy run changes -- what breaks is the truncated one, where a run
+      that aborted between the two writes leaves a dangling reference inside
+      the results the requirement says are persisted.
+    find: '        records = [*fresh, entry.as_dict(self._credentials)]'
+    replace: '        records = [entry.as_dict(self._credentials), *fresh]'
+
+  - control: test_a_reference_to_a_blob_the_log_does_not_carry_is_refused_by_name
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      A reference the log cannot resolve becomes an empty string and the run
+      carries on, which is what the v1 format's direct read would have done to
+      a record it could not find. The replay then serves a response whose
+      prompt is recorded as nothing, and "the exact prompt sent is
+      recoverable" is false for a log that raises no complaint.
+    find: '    content = blobs.get(digest, _ABSENT)'
+    replace: '    content = blobs.get(digest, "")'
+
+  - control: test_a_call_record_with_no_reference_at_all_is_refused_by_name
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      One wording for two causes. A record carrying no reference falls through
+      to the dangling-reference branch and is reported as a log that lost a
+      line, when what it is is a record written by something that does not know
+      this format. The same shape as the retry correction that read "cited
+      identifiers that were not in this prompt: ." -- a message that names the
+      wrong cause while looking as though it named one.
+    find: '    reference = raw.get(key)'
+    replace: '    reference = raw.get(key, "")'
+
+  - control: test_a_blob_that_does_not_hash_to_its_own_identifier_is_refused
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The identifier a blob is filed under is trusted rather than recomputed,
+      so a file whose index disagrees with what it stores replays for as long
+      as nobody looks. Every downstream claim about a committed log -- the
+      exact prompt sent first among them -- rests on that index being true.
+    find: '    actual = blob_hash(content)'
+    replace: '    actual = stated'
+
+  - control: test_a_credential_is_scrubbed_inside_the_blob_and_the_hash_covers_the_scrub
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The scrub is left behind by the move into the blob builder, so the system
+      prompt is stored raw. This is the defect an independent audit found three
+      times over in the v1 format -- three of the four scrubbed fields could be
+      written in the clear with the whole judged-tier suite green -- arriving
+      through the door marked "storage only".
+    find: '            "system": scrub_credentials(self.request.system, credentials),'
+    replace: '            "system": self.request.system,'
+
+  - control: test_the_sentinel_allowance_would_notice_a_mutable_value_wearing_one
+    file: tests/test_result_contract.py
+    defect: >-
+      The allowance that admits a bare `object()` sentinel is relaxed from
+      `type(value) is object` to an isinstance check, which every value passes.
+      The guard then reports no offender for any constant at all -- a list, a
+      dict, a mutable dataclass -- while looking exactly as it does now.
+    find: '    return isinstance(value, immutable) or type(value) is object'
+    replace: '    return isinstance(value, immutable) or isinstance(value, object)'
+
+  - control: test_a_dimension_whose_precondition_fails_returns_not_applicable_and_issues_nothing
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The precondition is never consulted, so a dimension answers on calls
+      whose subject is absent -- which is the state D125 records. Against an
+      empty clause set the criteria's "states a rule the clauses do not
+      support" is unconditionally true of every term the agent utters, and
+      three live passes flagged four no-clause calls `misaligned` on exactly
+      that, reproducibly.
+    find: '    absent = absent_categories(context, spec.applies_when_facts_present, entry_id=entry.id)'
+    replace: '    absent = ()'
+
+  - control: test_the_precondition_would_notice_a_dimension_that_stopped_applying_to_anything
+    file: src/harness/judge/prompt.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      Every named category reports absent whatever the call established, so a
+      dimension declaring a precondition applies to nothing at all. The tier
+      then answers `not_applicable` for its whole population and exits clean --
+      a run that measured nothing, presenting as a run that found nothing,
+      which is W11's shape arriving through a fix rather than through a
+      default.
+    find: '    return tuple(category for category in categories if not FACT_RENDERERS[category](context))'
+    replace: '    return tuple(categories)'
+
+  - control: test_a_precondition_on_a_category_the_entry_never_renders_is_refused
+    file: src/harness/core/rubric.py
+    control_file: tests/test_rubric.py
+    defect: >-
+      A precondition naming a category the entry does not render is accepted.
+      The category yields nothing to the prompt either, so the precondition is
+      evaluated against a renderer whose output the judge never sees -- and a
+      misspelling makes the dimension apply to every call while reading as
+      though it were bounded, which is the state the precondition exists to
+      end.
+    find: '    unrendered = tuple(item for item in precondition_raw if item not in facts_raw)'
+    replace: '    unrendered = ()'
+
+  - control: test_a_dimension_whose_repetitions_disagree_is_reported_as_a_distribution
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_judge_rollup.py
+    defect: >-
+      The distribution keeps only the modal verdict with the whole count under
+      it, so a call that split six to four reports as ten for the winner. This
+      is precisely what the P4 criterion said before D130 amended it -- "a
+      verdict distribution, not a single verdict" -- and precisely what a
+      unanimous fixture cannot tell apart from the real thing.
+    find: '                        (member, verdicts[member]) for member in entry.scale if verdicts[member]'
+    replace: '                        (verdicts.most_common(1)[0][0], sum(verdicts.values())),'
+
+  - control: test_a_tie_resolves_toward_the_negative_pole_and_says_that_it_was_a_tie
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_judge_rollup.py
+    defect: >-
+      A tie is resolved by scale order alone, so five for `addressed` and five
+      for `unaddressed` records that nothing went wrong. That is the fail-open:
+      an evaluator that could not decide, reported as a pass, on a tier whose
+      whole thesis is that failure modes must not be reported as one thing.
+    find: '    if entry.negative in tied:'
+    replace: '    if False:'
+
+  - control: test_the_rate_counts_calls_rather_than_repetitions
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_judge_rollup.py
+    defect: >-
+      The denominator counts repetitions rather than calls, which is D124's
+      option (C): ten repetitions of one call weight that call ten times in its
+      own pass rate. The shape `DuplicateCallError` refuses, arriving through a
+      legitimate door.
+    find: '        return sum(1 for call in self.calls if call.verdict is not None)'
+    replace: '        return sum(call.applicable for call in self.calls)'
+
+  - control: test_every_status_that_is_not_applicable_leaves_the_denominator
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_judge_rollup.py
+    defect: >-
+      Every call is in the denominator whatever its status, so a dimension that
+      errored, was refused, or did not apply is scored as though it had been
+      judged and passed. W11 is what a status channel costs when its members
+      are assumed rather than enumerated, and this is that one level up, in the
+      arithmetic.
+    find: '        return sum(1 for call in self.calls if call.verdict is not None)'
+    replace: '        return len(self.calls)'
+
+  - control: test_a_dimension_whose_every_result_was_refused_measured_nothing
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_judge_rollup.py
+    defect: >-
+      A dimension that produced no verdict at all never reports having measured
+      nothing, which is D127's state: a judged run whose every result was
+      refused exits 0 with the counts printed, and a CI job reads the exit code.
+    find: '            and any(name != Status.NOT_APPLICABLE.value for name, _ in call.statuses)'
+    replace: '            and any(False for name, _ in call.statuses)'
+
+  - control: test_a_dimension_that_applied_to_no_call_did_not_measure_nothing
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_judge_rollup.py
+    defect: >-
+      A dimension excluded by its own precondition is reported as having
+      measured nothing, so a rubric entry that correctly does not apply to this
+      corpus fails the run. The precondition's whole point is that not applying
+      is an answer rather than an absence, and this collapses the two states
+      the roll-up exists to keep apart.
+    find: '            and any(name != Status.NOT_APPLICABLE.value for name, _ in call.statuses)'
+    replace: '            and any(True for name, _ in call.statuses)'
+
+  - control: test_the_escaped_text_still_carries_what_it_escaped
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      Pipes are removed rather than escaped. The table renders perfectly and
+      the rationale a reader is being shown has had a character silently
+      deleted from it. **The criterion as originally written stays green under
+      this mutation** -- "renders without corrupting the report table" is true
+      of a renderer that deletes -- which is why D130 added the half that fails.
+    find: '    ("|", "\\|"),'
+    replace: '    ("|", ""),'
+
+  - control: test_escaping_is_injective_so_two_rationales_cannot_render_the_same
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      The backslash is not escaped, so `a|b` and `a\|b` render identically and
+      one of them cannot be recovered. The corruption is invisible: the table
+      still renders, and the round trip returns something plausible for the
+      wrong input.
+    find: '    ("\\", "\\\\"),'
+    replace: '    ("\\", "\\"),'
+
+  - control: test_an_entry_tracing_findings_on_two_desks_appears_in_both_sections
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      An entry is routed by the first of its owners rather than by membership,
+      so an entry naming an agent defect and a platform defect goes to one desk
+      and the other never sees it. D43's words for that row are "actionable by
+      nobody", and this is the render-time guess that decision exists to prevent.
+    find: '    return tuple(entry for entry in rubric.entries if _entry_owners(entry, findings) & owners)'
+    replace: '    return tuple(e for e in rubric.entries if next(iter(sorted(_entry_owners(e, findings))), None) in owners)'
+
+  - control: test_a_call_that_failed_in_more_than_one_way_carries_orthogonal_labels
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      The "what could not be evaluated" axis is dropped, so a call's row
+      collapses toward a single label. Taxonomy 34 is the recommendation that
+      one value cannot express an interaction that failed in several
+      independent ways, and its disposition is explicit that this report must
+      follow it rather than only report a system under test for ignoring it.
+    find: '                not_evaluated=tuple(not_evaluated),'
+    replace: '                not_evaluated=(),'
+
+  - control: test_the_non_determinism_caveat_is_inline_above_the_numbers_it_qualifies
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      The caveat moves to a footer under the table. It is still present, still
+      accurate, and a reader meets it after the numbers it qualifies -- which
+      is a caveat about numbers they have already believed.
+    find: '    caveat_first = True'
+    replace: '    caveat_first = False'
+
+  - control: test_the_tier_a_section_is_byte_identical_across_runs_and_across_modes
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      The deterministic renderer takes a mode. Nothing in the section is
+      produced by a model call, so there is nothing a mode could legitimately
+      change -- and a renderer that has one can use it tomorrow, which is the
+      conflation D8 warns about: somebody runs live, sees a snapshot failure,
+      regenerates it to make CI green, and the regression signal goes with it.
+    find: 'def render_tier_a(rollups: Sequence[EntryRollup], report: RunReport) -> str:'
+    replace: 'def render_tier_a(rollups: Sequence[EntryRollup], report: RunReport, mode: str = "replay") -> str:'
+
+  - control: test_the_report_matches_the_committed_snapshot_byte_for_byte
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      The report's own title changes. Nothing about the run changed, and the
+      output is still perfectly deterministic -- so
+      `test_two_consecutive_replay_reports_are_byte_identical` stays green
+      while this goes red. **That pairing is the criterion D130 added**: two
+      consecutive runs agreeing is a determinism assertion, and the regression
+      signal needs something older than this run to disagree with.
+    find: '        "# Evaluation report",'
+    replace: '        "# Evaluation Report",'
+
+  - control: test_a_synthesis_resting_on_a_dimension_that_produced_no_result_is_a_reported_defect
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The citation defect is never recorded, so a synthesis that reasoned from
+      a dimension which did not run reports a verdict and nothing beside it.
+      The requirement's verb is *report*, and this is the state where it does
+      not.
+    find: '                unresolved_dimensions(answer.rests_on, rendered.rests_on) if synthesis else ()'
+    replace: '                ()'
+
+  - control: test_a_synthesis_resting_only_on_dimensions_that_ran_is_reported_clean
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      **Every** identifier is reported as a defect, resolvable or not. That is
+      the design inverted, and it passes the criterion as originally written --
+      exactly the shape D104 found in the P2 grounding criterion whose fixture
+      resolved either way. The report then names every dimension the synthesis
+      rested on as a fabrication.
+    find: '    return tuple(raw for raw in rests_on if raw.strip() not in valid)'
+    replace: '    return tuple(rests_on)'
+
+  - control: test_the_synthesis_runs_after_every_dimension_for_the_same_call
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      Judged entries run in plain id order, so the synthesis lands wherever its
+      identifier sorts. Evaluated before the dimensions it rests on, it is
+      given nothing -- and its schema requires at least one identifier, so it
+      produces a citation defect on every call for a reason that is the
+      harness's and not the model's.
+    find: '    return tuple(sorted(entries, key=is_synthesis))'
+    replace: '    return tuple(entries)'
+
+  - control: test_a_synthesis_sees_only_its_own_calls_results
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The synthesis is given every outcome the run has produced so far rather
+      than this call's. Two calls' repetitions merge into one line and the
+      block reads as a plausible summary of a call that never happened.
+
+      **The first control written for this stayed green, and the control was
+      the thing at fault.** It asserted that another call's identifier did not
+      appear in the rendered prompt -- and the block names no call, by design,
+      so there was nothing for that comparison to find. The guard moved into
+      `synthesis_input`, where a foreign call id raises rather than rendering,
+      which is what makes this mutation observable at all.
+    find: '                    prior, call_id=context.call_id, rubric=rubric, repetition=repetition'
+    replace: '                    prior, call_id="CALL-02", rubric=rubric, repetition=repetition'
+
+  - control: test_the_evidence_guard_fires_for_every_judged_scale_the_rubric_declares
+    file: src/harness/core/rubric.py
+    control_file: tests/test_claim_checks.py
+    defect: >-
+      The evidence guard keys on a literal verdict instead of the entry's
+      declared negative pole. **W12 exactly**: an evidence-on-failure invariant
+      covering one verdict string and missing the negative pole of every other
+      scale. The phase-3 criterion stays green under this, because the entry it
+      names is the one whose pole is that literal -- which is what "not only
+      for one" was added to catch.
+    find: '    if result.verdict == entry.negative and not result.evidence:'
+    replace: '    if result.verdict == "misaligned" and not result.evidence:'
+
+  - control: test_every_entrys_max_tokens_clears_what_the_reference_run_recorded
+    file: rubric.yaml
+    control_file: tests/test_reference_run.py
+    defect: >-
+      A judged entry's ceiling goes back below what that entry actually
+      produced. **Re-derived from the committed log at D148's sweep, because the
+      mutation had gone stale against the measurement it is checked over.** It
+      targeted `J-policy-alignment` at 4096, on the reading that the entry had
+      run to 3,429 tokens -- eighty-four per cent of the way there -- which was
+      true of the log D135 measured and is not true of this one: that entry's
+      largest answer is now 2,367, fifty-eight per cent of 4096, so the restored
+      ceiling cleared D139's fill limit and the control could not fire. The
+      target is `J-caller-pushback-understood`, whose largest recorded answer is
+      **4,229 tokens** -- above 4096 outright, so the restored ceiling is one
+      the entry demonstrably overruns, which is the defect D137 exists for
+      rather than a number chosen to trip a threshold.
+    find: "    max_tokens: 8192  # the entry D137's two truncations were measured on"
+    replace: "    max_tokens: 4096  # the entry D137's two truncations were measured on"
+
+  - control: test_every_requirement_of_a_mapped_phase_appears_in_the_table
+    file: specs/voice-agent-eval-harness.md
+    control_file: tests/test_contract_coverage.py
+    defect: >-
+      A requirement gains a phase tag and no criterion covers it -- which is
+      the state D104 found five times in phase 2 and D130 found four times in
+      phase 4, both by reading. The mutation retags an existing `[P5]`
+      requirement as `[P4]`, so phase 4 carries a requirement its criteria say
+      nothing about, exactly as a newly-written one would.
+    find: '- WHEN [P5] judge validation runs, the system SHALL report agreement against human labels separately for the design set and the held-out set, SHALL report for each rubric entry the calls it fired on that carry a finding traced to it, the calls it was silent on that do, the calls it fired on that do not, the calls it was silent on that do not, and the calls it gave no verdict on by status, each set over its own call count, SHALL take a judged entry as firing where its gate reads a violation, and SHALL refuse held-out labels that break an invariant their traces state or that name a frozen commit other than the one this repository pins as `RUBRIC_FROZEN_V1`.'
+    replace: '- WHEN [P4] judge validation runs, the system SHALL report agreement against human labels separately for the design set and the held-out set, SHALL report for each rubric entry the calls it fired on that carry a finding traced to it, the calls it was silent on that do, the calls it fired on that do not, the calls it was silent on that do not, and the calls it gave no verdict on by status, each set over its own call count, SHALL take a judged entry as firing where its gate reads a violation, and SHALL refuse held-out labels that break an invariant their traces state or that name a frozen commit other than the one this repository pins as `RUBRIC_FROZEN_V1`.'
+
+  - control: test_every_phase_is_either_mapped_or_declared_unmapped
+    file: tests/test_contract_coverage.py
+    defect: >-
+      A phase drops out of both the mapping and the declared-unmapped set, so
+      it is covered by nothing and says nothing about being covered by nothing.
+      That is the silence `JUDGED_AGREEMENT_PENDING` refuses one register over:
+      a population is either asserted or declared owed, and there is no third
+      option.
+    find: 'UNMAPPED_PHASES: Final[frozenset[str]] = frozenset({"1", "2", "3", "7"})'
+    replace: 'UNMAPPED_PHASES: Final[frozenset[str]] = frozenset({"2", "3", "7"})'
+  - control: test_the_preflight_estimate_brackets_what_the_real_run_recorded
+    file: src/harness/cli.py
+    defect: >-
+      The pre-flight estimate under-states the synthesis entry's input, because
+      that entry's prompt carries the other six dimensions' results and the
+      renderer cannot see them before the run. Zeroing the allowance restores
+      exactly the pre-D142 arithmetic, which came in **below every recorded
+      input count on all sixteen calls** -- the one direction an estimate must
+      never be wrong in, since it is the number a human approves a spend
+      against. The check reads the committed log's own recorded token counts
+      rather than re-deriving them, so a difference in the estimate is what
+      fails it.
+    find: '_SYNTHESIS_INPUT_ALLOWANCE: Final[int] = 2048'
+    replace: '_SYNTHESIS_INPUT_ALLOWANCE: Final[int] = 0'
+  - control: test_a_skipped_control_is_not_mistaken_for_one_that_passed
+    file: tools/verify_controls.py
+    defect: >-
+      The control gate reads a SKIPPED control as one that ran and passed,
+      because pytest exits 0 for a skip and `run_control` returned
+      `returncode == 0`. Restoring it makes `_was_skipped` answer False for
+      everything, which is exactly the state before D143: the sweep then asks
+      whether a control noticed its defect, gets no answer either way, and
+      prints *stayed green with the defect restored* -- its phrase for an
+      instrument measuring nothing. Three report controls were reported that way
+      on the sweep that found this, beside one that genuinely was blind.
+    find: '    return not re.search(r"\b\d+ (?:passed|failed)\b", output)'
+    replace: '    return False'
+  - control: test_the_retry_window_outlasts_a_transient_overload
+    file: src/harness/core/transport.py
+    defect: >-
+      The retry budget goes back to the four attempts it shipped with, which on
+      the declared 1-2-4 schedule is a window of **seven seconds** guarding a
+      live recording that runs for over an hour. That is not a hypothetical: an
+      `overloaded_error` outlasted it on 2026-09-11 and aborted a run at call
+      575 of roughly 1,040, every one of those 575 having succeeded on its first
+      attempt. The check reads the sum of the schedule rather than the constant,
+      so lowering the count is what fails it and raising the base or the ceiling
+      would satisfy it instead -- the bound is the window, not the number of
+      tries.
+    find: 'MAX_TRANSPORT_ATTEMPTS: Final[int] = 7'
+    replace: 'MAX_TRANSPORT_ATTEMPTS: Final[int] = 4'
+  - control: test_every_scored_finding_still_matches_the_text_it_was_scored_against
+    file: corpus/findings.yaml
+    defect: >-
+      A finding's text is edited after it was scored, so its severity band goes
+      on describing wording nobody compared. That is not hypothetical: `e28650c`
+      converted 51 spellings across 17 files on 2026-09-07, three of them inside
+      judged findings, and **nothing in this repository noticed for four days**
+      (D140) -- the producing tool refuses on load, but the store holding the
+      hashes is gitignored and the edits that cause this are cross-cutting
+      sweeps where nobody runs that tool. The mutation edits one word of F-90's
+      observation, which is exactly the shape of the real defect, and the check
+      recomputes the hash from the gold set rather than trusting the exported
+      one, so a difference is what fails it.
+    find: '      The booking is in the Balcony band and the agent exchanged it into the'
+    replace: '      The booking is in the Stalls band and the agent exchanged it into the'
+  - control: test_the_pin_rule_would_notice_every_shape_of_range
+    file: tests/test_acceptance.py
+    defect: >-
+      The rule stops looking for `<`, so a pin with a ceiling bolted on reads as
+      an exact pin. That is the rule as it shipped here: it required `==` and
+      refused `>`, and `numpy==2.5.2,<3` satisfies both. The guard stays green
+      over every declared requirement either way, because none has a ceiling,
+      so the control is the only test placed to see the clause go.
+    find: '        if "==" not in specifier or ">" in specifier or "<" in specifier or "*" in specifier'
+    replace: '        if "==" not in specifier or ">" in specifier or "*" in specifier'
+  - control: test_the_expected_cost_sits_between_what_the_reference_run_spent_and_the_ceiling
+    file: src/harness/cli.py
+    defect: >-
+      The expected figure prices every answer at its entry's ceiling again, so the
+      pre-flight prints the ceiling twice under two names and an operator is back to
+      approving a number far above the bill with nothing true beside it -- OB-17,
+      restored with the second line still present. The check prices each entry
+      separately and requires the expected cost to sit below that entry's ceiling,
+      so equality is what fails it.
+    find: '            output_tokens_each=length,'
+    replace: '            output_tokens_each=estimate.max_tokens,'
+  - control: test_a_resumed_run_issues_only_the_calls_its_log_lacks
+    file: src/harness/core/transport.py
+    defect: >-
+      The resume serves nothing it recorded, so every request goes to the API again
+      and an aborted run's answers are paid for twice -- OB-20, restored with the
+      flag still accepted. The test resumes a half log under a ceiling of exactly the
+      calls it lacks, so a resume that issues everything halts at that ceiling and
+      exits differently from a replay of the full log.
+    find: '        entry = self._recorded.get((request.request_hash, request.repetition))'
+    replace: '        entry = None'
+
+  - control: test_each_synthesis_repetition_reads_its_own_resample_of_the_dimensions
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The draw ignores which repetition of the synthesis it is for, so every
+      repetition reads the same resample and the synthesis's N is again a set of
+      samples of one draw of its inputs -- OB-22 restored by another route, with
+      the resample still in place. The test sends a dimension that split through
+      every repetition and requires more than one prompt.
+    find: '        seed = f"{call_id}\n{entry_id}\n{repetition}\n{draw}".encode()'
+    replace: '        seed = f"{call_id}\n{entry_id}\n0\n{draw}".encode()'
+
+  - control: test_a_tied_dimension_is_shown_to_the_synthesis_as_the_report_reads_it
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      A line's headline is taken from the most common verdict in repetition
+      order, which on a tie is whichever verdict the earliest repetition
+      returned, so the synthesis is shown a verdict the report does not publish --
+      the state the committed run was in on every tied dimension-call pair. The
+      test's fixture ties with the earliest repetition away from the negative
+      pole, so only the report's rule names the report's verdict.
+    find: '    modal = _modal(distribution, entry)'
+    replace: '    modal = counts.most_common(1)[0][0]'
+
+  - control: test_the_schema_pin_would_notice_a_file_declaring_the_schema_before_cuts
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      The version comparison is bypassed, so a file declaring schema 2 is read
+      under schema 3's rules whenever it carries the fields -- the floor this
+      reader was pinned not to be. No test had driven the refusal: every
+      malformed file in the suite was refused by a missing field first. The
+      test declares schema 2 on a file carrying every field schema 3 requires.
+    find: '    if declared != SEVERITY_SCHEMA_VERSION:'
+    replace: '    if False:'
+
+  - control: test_the_cut_cross_check_would_notice_an_anchor_the_file_does_not_score
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      A cut anchored on a finding the file does not score is not refused, so
+      the re-derivation's lookup raises KeyError through a contract whose every
+      other refusal is a SeverityError -- the shape a non-numeric theta once
+      had. The test anchors a cut on an id no row carries.
+    find: '        if unscored:'
+    replace: '        if False:'
+
+  - control: test_the_cut_cross_check_would_notice_a_gap_its_anchors_contradict
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      The gap is never compared, so a file can state any distance between a
+      cut's anchors while its rows say another. The test's between-set is right
+      and its gap is wrong, so nothing else refuses it.
+    find: '        if gap != theta[above_id] - theta[below_id]:'
+    replace: '        if False:'
+
+  - control: test_the_cut_cross_check_would_notice_a_finding_left_out_of_between
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      The between-set is never compared, so a cut can leave out a finding its
+      own rows place inside it -- OB-19's defect, with the evidence for it in
+      the file and nothing reading it. The test's cut names one of the two
+      findings its rows put between the anchors.
+    find: '        if between != derived:'
+    replace: '        if False:'
+
+  - control: test_the_cut_cross_check_would_notice_an_anchor_counted_between_its_own_cut
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      The derivation counts a cut's anchors as lying between them, so it agrees
+      with a file that lists them and refuses every file the tool writes. The
+      test's cut lists its own anchors among the findings inside it, which only
+      the strict comparison refuses.
+    find: '            record.id for record in ranked if theta[below_id] < record.theta < theta[above_id]'
+    replace: '            record.id for record in ranked if theta[below_id] <= record.theta <= theta[above_id]'
+
+  - control: test_the_cut_cross_check_would_notice_between_listed_least_severe_first
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      The derivation ranks the least severe first, so it agrees with a file
+      listing a cut's findings bottom-up and refuses the order the tool writes.
+      The test lists the right findings in the wrong order, which only the
+      ranking decides.
+    find: '    ranked = sorted(records, key=lambda record: (-record.theta, record.id))'
+    replace: '    ranked = sorted(records, key=lambda record: (record.theta, record.id))'
+
+  - control: test_the_judged_tables_would_notice_an_errored_repetition_among_verdicts
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      The report's judged table prints 0 in the errored column whatever the
+      roll-up counted -- the audit's mutation, which the whole report module and
+      the snapshot passed before this control existed, because the committed log
+      records no errored result and the only test of the columns read their
+      names (P4-1). The control's call has an errored repetition among nine
+      verdicts, so the column must read 1.
+    find: '            f"| {rollup.result_count(Status.ERRORED)} "'
+    replace: '            f"| 0 "'
+
+  - control: test_the_judged_tables_would_notice_an_errored_repetition_among_verdicts
+    file: src/harness/cli.py
+    control_file: tests/test_report.py
+    defect: >-
+      The command's judged roll-up prints 0 in the err column, the same defect in
+      the renderer the report does not share. One mutation per renderer, because
+      each carries its own column and a control proven against one proves
+      nothing about the other.
+    find: '            f"{rollup.result_count(Status.ERRORED):>4} "'
+    replace: '            f"{0:>4} "'
+
+  - control: test_a_call_row_would_notice_its_errored_repetition_dropped_beside_its_verdicts
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_report.py
+    defect: >-
+      A call's outcome prints its statuses only when it has no verdict at all,
+      which is the rule both renderers carried a copy of until D158: a call with
+      nine verdicts and one errored repetition showed the nine and hid the one.
+      The control reads the report's distribution row and the command's call
+      line, which print the one text this function returns.
+    find: '    if spread and statuses:'
+    replace: '    if False:'
+
+  - control: test_the_audience_sections_would_notice_an_entry_rendered_on_the_wrong_desk
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      The audience renderer ignores the routing for the deterministic tier, so
+      every deterministic entry lands in both sections. That passed all three
+      tests criterion 3 named -- two drive the routing function and never render,
+      and the third asks only that each section name at least one routed entry --
+      and was caught by the snapshot alone (P4-2).
+    find: '    mine_det = [rollup for rollup in deterministic if rollup.entry.id in ids]'
+    replace: '    mine_det = list(deterministic)'
+
+  - control: test_the_calls_table_would_notice_a_judged_entry_found_on_a_minority_of_repetitions
+    file: src/harness/report.py
+    control_file: tests/test_report.py
+    defect: >-
+      A judged entry counts as found on a call when any repetition returned the
+      negative pole again, while the gate and both judged tables read the modal
+      verdict. On the committed log that lists J-call-synthesis as found on
+      CALL-07, whose modal verdict is no_material_defect (P4-8).
+    find: '                for result in deterministic'
+    replace: '                for result in [*deterministic, *judged_here]'
+
+  - control: test_the_modal_helper_would_notice_a_tie_with_the_negative_pole
+    file: tests/test_reference_run.py
+    defect: >-
+      The reference-run helper resolves a tie by Counter.most_common again, which
+      names whichever verdict the log recorded first. On a five-five tie with the
+      positive pole recorded first it reads clean where the gate reads a
+      violation, and every reference-run assertion about what an entry concluded
+      reads that helper (P4-3). The control drives exactly that tie.
+    find: '    return rollup_modal(tuple(counter.items()), entry)'
+    replace: '    return counter.most_common(1)[0][0]'
+
+  - control: test_the_gate_would_notice_a_declared_violating_verdict_read_as_a_pass
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_judge_rollup.py
+    defect: >-
+      A call counts against a judged gate only when its modal verdict is the
+      negative pole, whatever else the entry declares violating. That is the
+      reading under which J-concerns-addressed caught none of the findings it
+      traces on the committed log: the judge returned partially_addressed on
+      every call carrying them, and the gate passed it (D160).
+    find: '        return self.verdict in self.entry.violating'
+    replace: '        return self.verdict == self.entry.negative'
+
+  - control: test_the_tie_rule_would_notice_a_split_with_a_violating_verdict_read_as_a_pass
+    file: src/harness/judge/rollup.py
+    control_file: tests/test_judge_rollup.py
+    defect: >-
+      A tie between a passing verdict and a declared violating verdict other
+      than the pole resolves by scale order, so five addressed and five
+      partially_addressed records a pass on an entry that counts the second
+      against its gate -- the fail-open the pole's own tie rule exists to
+      refuse (D160).
+    find: '        if member != entry.negative and member in tied:'
+    replace: '        if False:'
+
+  - control: test_the_loader_would_notice_a_violating_verdict_outside_the_scale
+    file: src/harness/core/rubric.py
+    control_file: tests/test_rubric.py
+    defect: >-
+      A violating verdict the scale does not declare is dropped without a word,
+      so a misspelled middle value leaves the entry counting its pole alone
+      while the rubric reads as though it counted more.
+    find: '    if off_scale:'
+    replace: '    if False:'
+
+  - control: test_the_loader_would_notice_a_violating_set_without_its_negative_pole
+    file: src/harness/core/rubric.py
+    control_file: tests/test_rubric.py
+    defect: >-
+      A violating set that leaves out the negative pole loads, so a call whose
+      modal verdict is the pole -- the scale's own declaration that something
+      went wrong -- passes the gate.
+    find: '    if negative not in declared:'
+    replace: '    if False:'
+
+  - control: test_the_loader_would_notice_a_violating_set_naming_every_verdict
+    file: src/harness/core/rubric.py
+    control_file: tests/test_rubric.py
+    defect: >-
+      A violating set naming every member of the scale loads, so the gate fails
+      on every call it judges whatever the judge answers -- a measurement of the
+      rubric rather than of the agent.
+    find: '    if set(declared) == set(scale):'
+    replace: '    if False:'
+
+  - control: test_the_engine_would_notice_an_uncited_answer_read_as_applicable
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      An answer with an empty citations list parses, so no informed retry fires
+      and the engine builds an applicable result whose evidence is the judge's
+      rationale line alone -- which satisfies the evidence guard, so an uncited
+      verdict, the pole included, counts against the gate (P4-23).
+    find: '            if not citations:'
+    replace: '            if False:'
+
+  - control: test_the_engine_would_notice_a_synthesis_resting_on_nothing_read_as_applicable
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      A synthesis answer with an empty rests_on list is accepted, and
+      unresolved_dimensions finds nothing unresolved in nothing, so a synthesis
+      resting on no dimension stands as a clean verdict with no defect beside
+      it, although its declared schema requires at least one.
+    find: '    if rendered.rests_on and reading.rests_on == ():'
+    replace: '    if False:'
+
+  - control: test_the_retry_would_notice_a_schema_failure_it_does_not_name
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The correction for a schema failure drops the failure the engine found, so
+      an answer that parsed and cited nothing is told it could not be read, sent
+      guidance about prose and code fences, and never told which list came back
+      empty (P4-27).
+    find: '        named = f": {failure}" if failure else ""'
+    replace: '        named = ""'
+
+  - control: test_the_retry_would_notice_a_synthesis_not_shown_the_dimensions_it_may_rest_on
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      A synthesis corrected for a schema failure is shown only the transcript and
+      fact identifiers and asked to cite from them, so a synthesis whose rests_on
+      came back empty is told nothing about the dimensions it may rest on (P4-27).
+    find: '    if dimensions and failure:'
+    replace: '    if False:'
+
+  - control: test_the_schema_would_notice_a_synthesis_shown_no_dimension_asked_to_rest_on_one
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The request's schema follows the entry alone, so a synthesis shown no
+      dimension is still sent rests_on with minItems 1 while its prompt tells it
+      not to invent a dimension identifier, and any name it gives comes back
+      unresolved -- a defect on every repetition the harness caused (P4-28).
+    find: '    asks_rests_on = is_synthesis(entry) and bool(rendered.rests_on)'
+    replace: '    asks_rests_on = is_synthesis(entry)'
+
+  - control: test_the_workflow_runs_every_phase_verifier_and_the_inventory
+    file: .github/workflows/checks.yml
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      The phase-4 verifier's step no longer runs in CI, which the test's own
+      list of three verifiers let through: the fourth phase added its row to
+      VERIFIERS and never to the list the workflow was checked against (P4-10).
+    find: '        run: uv run --no-sync python -m tools.verify_phase4 --junit build/phase1-junit.xml'
+    replace: '        run: echo "the phase-4 verifier step was removed"'
+
+  - control: test_the_report_would_notice_its_path_reading_a_credential
+    file: src/harness/cli.py
+    control_file: tests/test_report.py
+    defect: >-
+      The report path reads the credential values in reach, and the subprocess
+      test beside it passes anyway: reading them raises for nothing, and running
+      from an empty directory never put the checkout's .env out of reach (P4-12).
+    find: '    registry = build_registry()'
+    replace: '    registry = build_registry(); credential_values(root)'
+
+  - control: test_the_ceiling_would_notice_an_entry_lowered_to_where_it_truncated
+    file: rubric.yaml
+    control_file: tests/test_reference_run.py
+    defect: >-
+      The synthesis's ceiling returns to 8192, the length a recording of it was
+      cut at, and every test reading the committed log stays green, because the
+      recording that truncated was never committed and the log's largest
+      synthesis answer is 2,140 tokens (P4-14).
+    find: '    max_tokens: 16384'
+    replace: '    max_tokens: 8192'
+
+  - control: test_the_trigger_check_would_notice_a_fired_trigger_left_unacknowledged
+    file: tests/test_obligations.py
+    defect: >-
+      The check stops comparing a tag trigger with what has happened, so a
+      deferral whose tag exists reads as though nothing had fired, and a row
+      claiming a tag fired that never existed passes too -- which is how the
+      tag fired 13 rows with nothing in the tree noticing (P4-15).
+    find: '        if fired != acknowledged:'
+    replace: '        if False:'
+
+  - control: test_the_reader_would_notice_a_torn_line_escaping_as_a_decode_error
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      A run-log line cut off mid-write reaches the parser's own error, so replay
+      and report exit 1, the code for a gate that failed, with a traceback, and a
+      resume refuses naming no file (P4-11).
+    find: '        except json.JSONDecodeError as exc:'
+    replace: '        except KeyError as exc:'
+
+  - control: test_a_resume_would_notice_its_torn_tail_refused_instead_of_dropped
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      A resume refuses a log whose final line was cut off mid-write, which is the
+      log a run that stopped mid-write leaves and the one a resume exists to
+      finish (P4-11).
+    find: '            if tolerate_torn_tail and position == len(numbered) - 1 and position > 0:'
+    replace: '            if False:'
+
+  - control: test_a_resume_would_notice_a_log_answering_no_dimension_request_run_anyway
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A resume log answering none of the dimension requests the run would send is
+      resumed anyway, so the operator approves spend for a run that issues every
+      call under a header naming a session that served nothing (P4-4).
+    find: '            if not servable:'
+    replace: '            if False:'
+
+  - control: test_a_resume_under_an_edited_entry_would_notice_its_counts_misprinted
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The run's end prints no true count of the answers a resume served, which is
+      how a resume that served nothing went unsaid (P4-4).
+    find: '            f"resume: {resuming.served} answer(s) served from {args.resume} and "'
+    replace: '            f"resume: 0 answer(s) served from {args.resume} and "'
+
+  - control: test_a_resume_under_an_edited_entry_would_notice_its_counts_misprinted
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The pre-flight reports every dimension request answered in the resumed log
+      whatever the log holds, so an edited entry's misses go unsaid before the
+      confirmation (P4-4).
+    find: '                f"resume: {servable} of the {len(dimension_requests)} dimension request(s) "'
+    replace: '                f"resume: {len(dimension_requests)} of the {len(dimension_requests)} dimension request(s) "'
+
+  - control: test_the_expected_figure_would_notice_recorded_retries_left_out
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The expected figure prices first attempts alone, so the informed retries the
+      reference log recorded are left to the input side's over-estimate to cover
+      (P4-16).
+    find: '        cost += share * estimate_cost_usd('
+    replace: '        cost += estimate_cost_usd('
+
+  - control: test_the_retry_share_would_notice_the_retries_a_log_records_uncounted
+    file: src/harness/cli.py
+    control_file: tests/test_reference_run.py
+    defect: >-
+      Every entry's retry share reads one, so a log whose synthesis retried is
+      priced as though nothing did (P4-16).
+    find: '    return {entry_id: 1 + retried.get(entry_id, 0) / count for entry_id, count in first.items()}'
+    replace: '    return {entry_id: 1.0 for entry_id in first}'
+
+  - control: test_the_expected_figure_would_notice_a_stale_log_left_unflagged
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A reference log recorded under another rubric version or prompt template
+      prices the figure with nothing said, so an operator approves spend on
+      lengths that describe another state (P4-16).
+    find: '    if stale:'
+    replace: '    if False:'
+
+  - control: test_the_cut_check_would_notice_a_cut_named_outside_the_three
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      A cut's name is never read, so a cut named `nonsense` is accepted beside
+      the tool's three and a band is placed by a boundary the tool does not
+      have (P4-5).
+    find: '        if name not in CUT_ORDER:'
+    replace: '        if False:'
+
+  - control: test_the_cut_check_would_notice_a_cut_named_twice
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      A cut stated twice is accepted, and whichever of the two is read last
+      places the band.
+    find: '        if any(cut.name == name for cut in cuts):'
+    replace: '        if False:'
+
+  - control: test_the_cut_check_would_notice_an_inverted_or_single_anchor_cut
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      A cut whose anchors the file's own theta inverts, or one finding at both
+      ends, is accepted with a gap and a between-set consistent with its rows
+      (P4-5).
+    find: '        if theta[above_id] <= theta[below_id]:'
+    replace: '        if False:'
+
+  - control: test_the_cut_check_would_notice_a_missing_cut
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      A file stating fewer than three cuts is read as though it stated what it
+      needs, which the tool never exports and under which no band can be
+      placed.
+    find: '    if absent_cuts:'
+    replace: '    if False:'
+
+  - control: test_the_cut_check_would_notice_boundaries_that_have_crossed
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      Three cuts each valid alone are accepted with their midpoints out of
+      severity order, so two boundaries have crossed and no check of one cut
+      can see it.
+    find: '    if any(higher <= lower for higher, lower in itertools.pairwise(midpoints)):'
+    replace: '    if False:'
+
+  - control: test_the_band_check_would_notice_a_row_on_the_wrong_side_of_its_cuts_midpoint
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      A row's band is never compared with the side of the midpoints its theta
+      falls on, so a finding that crosses a midpoint while staying between that
+      cut's anchors keeps a band its own file contradicts (P4-5).
+    find: '        if record.severity != derived:'
+    replace: '        if False:'
+
+  - control: test_the_band_check_would_notice_a_row_on_a_midpoint_banded_up
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      A theta exactly on a midpoint is banded on the more severe side, which
+      the tool does not do, so a file the tool wrote is refused and one it
+      could not have written is accepted.
+    find: '        if value > midpoint:'
+    replace: '        if value >= midpoint:'
+
+  - control: test_a_band_outside_the_vocabulary_is_refused
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      A band outside the vocabulary reaches the band check and is refused as a
+      misplaced band, so the refusal no longer says it is a band nobody
+      defined.
+    find: '        if record.severity not in SEVERITY_BANDS:'
+    replace: '        if False:'
+
+  - control: test_a_header_carries_the_labels_manifest_a_held_out_run_names
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The writer leaves the labels manifest out of the header, so a held-out
+      run writes a log the held-out repository's gate refuses (D173).
+    find: '        if self.labels_manifest:'
+    replace: '        if False:'
+
+  - control: test_a_header_carries_the_labels_manifest_a_held_out_run_names
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The reader drops the labels manifest, so a replay or a resume compares
+      the run's manifest against none (D173).
+    find: '            labels_manifest=str(raw_header.get("labels_manifest", "")),'
+    replace: '            labels_manifest="",'
+
+  - control: test_the_manifest_check_would_notice_a_log_naming_other_labels
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The manifests go uncompared, so a run serves answers from a log sealed
+      against other held-out labels, or none, under a header naming its own
+      (D173).
+    find: '    if logged.labels_manifest != current.labels_manifest:'
+    replace: '    if False:'
+
+  - control: test_a_held_out_resume_would_notice_a_log_naming_other_labels
+    file: src/harness/core/transport.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A resume skips the manifest check, so it reaches the confirmation for a
+      log whose header would name labels its answers were not recorded under
+      (D173).
+    find: '    check_labels_manifest(prior, current, path)'
+    replace: '    pass'
+
+  - control: test_a_held_out_replay_would_notice_a_log_naming_other_labels
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A replay skips the manifest check, so it writes a log naming one manifest
+      over answers recorded under another (D173).
+    find: '        check_labels_manifest(replayed, header, replay_log)'
+    replace: '        pass'
+
+  - control: test_a_held_out_replay_writes_its_labels_manifest_into_the_log
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The run builds its header without the flag, so a held-out live run
+      writes a log naming no manifest, which the gate refuses after the spend
+      (D173).
+    find: '        labels_manifest=args.labels_manifest,'
+    replace: '        labels_manifest="",'
+
+  - control: test_a_held_out_run_would_notice_its_labels_manifest_missing
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      No call is recognized as held out, so a run over the held-out set needs
+      no manifest and writes a log the gate refuses (D173).
+    find: '    held_out = [call_id for call_id in call_ids if call_id in held_out_set]'
+    replace: '    held_out: list[str] = []'
+
+  - control: test_a_held_out_run_would_notice_its_labels_manifest_missing
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A held-out run with no flag is not told it needs one, and is refused
+      instead as a malformed SHA it never passed (D173).
+    find: '    if not manifest:'
+    replace: '    if False:'
+
+  - control: test_a_held_out_run_would_notice_its_labels_manifest_missing
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The command computes the problem and ignores it, so every refusal the
+      labels manifest has is lifted at once (D173).
+    find: '    if manifest_problem:'
+    replace: '    if False:'
+
+  - control: test_a_run_mixing_held_out_and_design_calls_would_be_noticed
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A run mixing held-out and design calls goes ahead, so a log puts design
+      calls under a header naming held-out labels (D173).
+    find: '    if undeclared:'
+    replace: '    if False:'
+
+  - control: test_a_design_run_would_notice_a_labels_manifest_it_has_no_use_for
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A design run takes the flag, so a manifest in a header no longer marks a
+      held-out log and nothing else (D173).
+    find: '        if manifest:'
+    replace: '        if False:'
+
+  - control: test_a_malformed_labels_manifest_would_be_noticed
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The flag's shape goes unchecked, so any value passed is written into a
+      held-out log's header (D173).
+    find: '    if not _LABELS_MANIFEST_SHA.fullmatch(manifest):'
+    replace: '    if False:'
+
+  - control: test_a_judged_run_would_notice_its_held_out_set_missing
+    file: src/harness/heldout.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A missing HELDOUT_SET reads as declaring nothing, so a held-out run
+      started where the file is absent goes unrecognized and writes a log with
+      no manifest (D173).
+    find: '    declared = path.read_text(encoding="utf-8").split("\n")'
+    replace: '    declared = path.read_text(encoding="utf-8").split("\n") if path.is_file() else []'
+
+  - control: test_a_held_out_run_would_notice_a_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A held-out run's transcripts go unchecked, so a run reading them from inside
+      this checkout goes ahead (D174).
+    find: '        ("--transcripts", args.transcripts),'
+    replace: '        ("--transcripts", ""),'
+
+  - control: test_a_held_out_run_would_notice_a_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A held-out run's log directory goes unchecked, so a run left on the default
+      writes its log into runs/ in this checkout (D174).
+    find: '        ("--run-log-dir", args.run_log_dir),'
+    replace: '        ("--run-log-dir", ""),'
+
+  - control: test_a_held_out_run_would_notice_a_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The log a held-out replay serves goes unchecked, so a replay reads a log from
+      inside this checkout (D174).
+    find: '        ("--run-log", args.run_log),'
+    replace: '        ("--run-log", ""),'
+
+  - control: test_a_held_out_resume_would_notice_its_log_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The log a held-out resume finishes goes unchecked, so a resume reads a log
+      from inside this checkout (D174).
+    find: '        ("--resume", args.resume),'
+    replace: '        ("--resume", ""),'
+
+  - control: test_a_held_out_run_would_notice_a_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      No path is compared with the checkout, so every held-out run reads and writes
+      wherever its flags point (D174).
+    find: '        if value and _resolve(value, root).resolve().is_relative_to(checkout):'
+    replace: '        if False:'
+
+  - control: test_a_held_out_run_would_notice_a_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The command finds the paths inside the checkout and goes ahead anyway (D174).
+    find: '    if inside:'
+    replace: '    if False:'
+
+  - control: test_a_held_out_run_would_notice_a_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      No run is recognized as held out for the path check, so a held-out run's
+      paths are never compared with the checkout (D174).
+    find: '    held_out_run = any(context.call_id in held_out_set for context in contexts)'
+    replace: '    held_out_run = False'
+
+  - control: test_a_held_out_run_log_is_found_by_its_header
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A run-log header naming a labels manifest goes unread, so a whole held-out
+      run log in the tree is unseen (D174).
+    find: '        if _HEADER_RECORD.search(line) and _MANIFEST_KEY.search(line):'
+    replace: '        if False:'
+
+  - control: test_a_held_out_call_record_is_found_wherever_it_is_pasted
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      Call records go unread, so records copied out of a held-out run log into
+      another file are unseen (D174).
+    find: '            if match is not None and match.group(1) in held_out:'
+    replace: '            if False:'
+
+  - control: test_a_design_run_log_is_not_mistaken_for_a_held_out_one
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A call record is reported whatever call it cites, so every design log in
+      runs/ fails the check (D174).
+    find: '            if match is not None and match.group(1) in held_out:'
+    replace: '            if match is not None:'
+
+  - control: test_a_held_out_record_past_the_window_or_the_cap_is_still_found
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The run-log reading stops at the transcript scan's 64 KB window, so a
+      record past it is unseen (D174).
+    find: '        text = _decoded(path)'
+    replace: '        text = _decoded(path)[:_MARKER_WINDOW]'
+
+  - control: test_a_held_out_record_past_the_window_or_the_cap_is_still_found
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The run-log reading skips files over the transcript scan's 2 MB cap, so a
+      design-size run log is never read (D174).
+    find: '    if suffix in _BINARY_SUFFIXES:'
+    replace: '    if suffix in _BINARY_SUFFIXES or path.stat().st_size > _MAX_BYTES:'
+
+  - control: test_the_check_reports_a_held_out_run_log_in_the_tree_it_scans
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The check leaves run logs out of its problems, so what the scan finds is
+      reported by nothing (D174).
+    find: '    for path, reason in sorted(scan_run_logs(REPO_ROOT, frozenset(held_out)).items()):'
+    replace: '    for path, reason in {}.items():'
+
+  - control: test_agreement_would_notice_its_counts_read_in_one_direction
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A fired call counts as a hit whether or not a finding is traced there, so false
+      alarms read as agreement (D175).
+    find: '        elif fired and call in expected:'
+    replace: '        elif fired:'
+
+  - control: test_agreement_would_notice_its_counts_read_in_one_direction
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A silent call counts as a correct silence even where a finding is traced, so
+      misses read as agreement (D175).
+    find: '        elif call in expected:'
+    replace: '        elif False:'
+
+  - control: test_agreement_would_notice_its_counts_read_in_one_direction
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A call with no verdict is counted as a miss or a silence, so a measurement
+      failure reads as a measured answer (D175).
+    find: '        if status is not Status.APPLICABLE:'
+    replace: '        if False:'
+
+  - control: test_agreement_would_notice_a_call_left_without_a_reading
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A call the entry has no result for is not refused by name, and the count fails
+      on it as an error the command does not name (D175).
+    find: '    if missing:'
+    replace: '    if False:'
+
+  - control: test_a_judged_entry_would_notice_its_middle_verdict_read_as_a_pass
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A judged entry fires only on its negative pole, so a middle verdict its gate
+      counts reads as a pass (D160, D175).
+    find: '            readings[call.call_id] = (Status.APPLICABLE, call.violated)'
+    replace: '            readings[call.call_id] = (Status.APPLICABLE, call.verdict == call.entry.negative)'
+
+  - control: test_the_traces_file_would_notice_a_key_missing_or_added
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A traces file missing a key, or holding one more, is read as if it held
+      exactly the four (D175).
+    find: '    if missing or extra:'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      Traces naming another frozen commit are scored against this rubric (D175).
+    find: '    if traces.rubric_frozen != RUBRIC_FROZEN_V1:'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A rubric entry with no traces row is scored as if it traced nothing (D175).
+    find: '    if absent := sorted(entry_ids - set(traces.traces)):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A traces row for an entry the rubric does not declare goes unnoticed (D175).
+    find: '    if strangers := sorted(set(traces.traces) - entry_ids):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A held-out finding whose id is not HF-NN is accepted, so held-out and design
+      ids can collide (D175).
+    find: '    if malformed := sorted(i for i in finding_ids if not HELD_OUT_FINDING_ID.fullmatch(i)):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      Traces or uncovered naming a finding the findings file does not hold goes
+      unnoticed (D175).
+    find: '    if unheld := sorted((traced | traces.uncovered) - known):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A finding both traced to an entry and uncovered is accepted (D175).
+    find: '    if doubled := sorted(traced & traces.uncovered):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A finding neither traced to an entry nor uncovered is accepted (D175).
+    find: '    if orphaned := sorted(known - traced - traces.uncovered):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A finding on a call the set does not read is accepted (D175).
+    find: '    if elsewhere := sorted(referenced - call_set):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      calls_without_findings naming a call the set does not read is accepted (D175).
+    find: '    if unread := sorted(traces.calls_without_findings - call_set):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A call carrying a finding and also listed without one is accepted (D175).
+    find: '    if both := sorted(referenced & traces.calls_without_findings):'
+    replace: '    if False:'
+
+  - control: test_the_held_out_labels_would_notice_each_broken_invariant
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A call carrying no finding and not listed without one is accepted (D175).
+    find: '    if unaccounted := sorted(call_set - referenced - traces.calls_without_findings):'
+    replace: '    if False:'
+
+  - control: test_agreement_would_notice_its_design_section_miscounted
+    file: src/harness/agreement.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A deterministic entry never reads as firing, so every hit it scores is
+      reported as a miss (D175).
+    find: '        result.call_id: (result.status, result.verdict in entry.violating)'
+    replace: '        result.call_id: (result.status, False)'
+
+  - control: test_agreement_would_notice_its_design_section_miscounted
+    file: src/harness/agreement.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The design set's traces are left empty, so every firing is a false alarm
+      (D175).
+    find: '        expected[entry.id] = frozenset(findings[finding].call_ref for finding in entry.traces_to)'
+    replace: '        expected[entry.id] = frozenset()'
+
+  - control: test_agreement_would_notice_its_design_section_miscounted
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The design section is computed and never printed (D175).
+    find: '    for line in render_set(design, DESIGN_CAVEAT):'
+    replace: '    for line in []:'
+
+  - control: test_agreement_would_notice_its_held_out_section_left_out
+    file: src/harness/agreement.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The held-out set's traces are left empty, so every firing is a false alarm
+      (D175).
+    find: '        entry_id: frozenset(findings[finding].call_ref for finding in ids)'
+    replace: '        entry_id: frozenset()'
+
+  - control: test_agreement_would_notice_its_held_out_section_left_out
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The held-out section is computed and never printed, so the command says it
+      was not computed (D175).
+    find: '            held_out_lines = render_set(held, HELD_OUT_CAVEAT)'
+    replace: '            pass'
+
+  - control: test_agreement_would_notice_held_out_inputs_given_in_part
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      Some of the held-out inputs are accepted without the rest, and the command
+      fails on a missing one unnamed (D175).
+    find: '    if given and len(given) != len(inputs):'
+    replace: '    if False:'
+
+  - control: test_agreement_would_notice_a_held_out_input_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The command finds held-out inputs inside the checkout and reads them anyway
+      (D174, D175).
+    find: '    if held_out_inside:'
+    replace: '    if False:'
+
+  - control: test_agreement_would_notice_a_held_out_input_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      No held-out input is compared with the checkout, so held-out labels are read
+      from inside this tree (D174, D175).
+    find: '        and _resolve(getattr(args, name), root).resolve().is_relative_to(repository)'
+    replace: '        and False'
+
+  - control: test_agreement_would_notice_design_calls_declared_held_out
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A design corpus holding a declared held-out call is scored, so the design
+      section scores held-out calls (D175).
+    find: '    if not held_out and declared:'
+    replace: '    if False:'
+
+  - control: test_agreement_would_notice_a_held_out_set_holding_an_undeclared_call
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      Held-out transcripts holding an undeclared call are read as the held-out set
+      (D173, D175).
+    find: '    if held_out and declared != len(calls):'
+    replace: '    if False:'
+
+  - control: test_agreement_would_notice_a_held_out_log_naming_no_manifest
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A held-out log naming no labels manifest is scored, though no held-out run
+      writes one (D173, D175).
+    find: '    if held_out and not logged.labels_manifest:'
+    replace: '    if False:'
+
+  - control: test_agreement_would_notice_held_out_labels_breaking_an_invariant
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The command never checks the held-out labels, so traces naming another frozen
+      commit are scored (D175).
+    find: '    check_held_out_labels(traces, rubric, findings, calls)'
+    replace: '    pass'
+
+  - control: test_agreement_would_notice_a_replay_that_stopped_part_way
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A replay that stopped part-way is scored over the calls it still answers
+      (D175).
+    find: '    if stopped:'
+    replace: '    if False:'
+
+  - control: test_the_claim_check_would_notice_a_declaration_ignored
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      A criterion a declaration names is still reported as claimed by nothing, so
+      every declared criterion fails the claim test (D176).
+    find: '        and not any(declaration.spec_anchor in line for declaration in declared)'
+    replace: '        and True'
+
+  - control: test_the_claim_check_would_notice_a_criterion_both_ticked_and_declared
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      A criterion both ticked and declared goes unfound, so a declaration outlives
+      the build that replaced it (D176).
+    find: '        and any(declaration.spec_anchor in line for declaration in declared)'
+    replace: '        and False'
+
+  - control: test_a_declaration_would_notice_each_way_it_cannot_stand
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      A declaration whose anchor names no criterion of its phase is accepted (D176).
+    find: '        if not declaration.spec_anchor or not any('
+    replace: '        if False and not any('
+
+  - control: test_a_declaration_would_notice_each_way_it_cannot_stand
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      A declaration of a kind nobody defined is accepted (D176).
+    find: '        if declaration.kind not in DECLARATION_KINDS:'
+    replace: '        if False:'
+
+  - control: test_a_declaration_would_notice_each_way_it_cannot_stand
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      A declaration giving no reason is accepted when it is not yet built (D176).
+    find: '        if not declaration.reason.strip():'
+    replace: '        if False:'
+
+  - control: test_a_declaration_would_notice_each_way_it_cannot_stand
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      A criterion declared as asserted elsewhere need not name where, so elsewhere
+      can be nowhere (D176).
+    find: '        elif declaration.kind == ASSERTED_ELSEWHERE and not any('
+    replace: '        elif False and not any('
+
+  - control: test_the_loop_would_notice_its_declarations_left_unprinted
+    file: tools/verify_phase2.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      The loop takes declarations and never prints them, so a verifier's output
+      says nothing of what it declared rather than ticked (D176).
+    find: '    if declared:'
+    replace: '    if False:'
+
+  - control: test_the_loop_would_notice_its_declarations_left_unprinted
+    file: tools/verify_phase2.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      The closing line leaves the declarations uncounted, so it reads as a phase
+      whose every criterion was ticked (D176).
+    find: '    if elsewhere or pending:'
+    replace: '    if False:'
+
+  - control: test_phase_5_declares_the_gate_asserted_criteria_and_the_unbuilt_report
+    file: tools/verify_phase5.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      A phase-5 declaration's anchor moves off its criterion, so the manifest
+      criterion is declared as something it is not (D176).
+    find: '        spec_anchor="The hash manifest matches the published held-out labels",'
+    replace: '        spec_anchor="The hash manifest",'
+
+  - control: test_the_workflow_runs_every_phase_verifier_and_the_inventory
+    file: .github/workflows/checks.yml
+    defect: >-
+      CI stops running the phase-5 verifier, so its ticks and declarations are
+      checked only when somebody remembers (D176).
+    find: '        run: uv run --no-sync python -m tools.verify_phase5 --junit build/phase1-junit.xml'
+    replace: '        run: echo "phase 5 verifier not run"'
+
+  - control: test_a_field_named_only_outside_its_list_does_not_count
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      A list is read from the whole specification rather than from the sentence
+      that enumerates it (D178), so a field named only as a subcommand counts as
+      listed, which is P4-17.
+    find: '    segment = text[start : _sentence_end(text, start)]'
+    replace: '    segment = text'
+
+  - control: test_a_field_named_only_outside_its_list_does_not_count
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      A list runs from its opening phrase to the end of the document rather than
+      of its sentence (D178), so names in later sentences count as listed.
+    find: '    segment = text[start : _sentence_end(text, start)]'
+    replace: '    segment = text[start:]'
+
+  - control: test_a_list_sentence_stated_twice_fails
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      An opening phrase stated twice is accepted and its first occurrence read
+      (D178), so a doubled list sentence passes.
+    find: '    if count != 1:'
+    replace: '    if count < 1:'
+
+  - control: test_a_list_sentence_that_is_gone_fails_and_names_it
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      An opening phrase that no longer occurs is let through (D178), so a list
+      sentence reworded away is never reported as gone.
+    find: '    if count != 1:'
+    replace: '    if count > 1:'
+
+  - control: test_an_extra_name_in_a_list_fails_and_names_it
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      Names a list sentence carries beyond the scanner's set are never reported
+      (D178), so a field added on one side passes.
+    find: '            for name in sorted(read[side] - frozenset(expected)):'
+    replace: '            for name in ():'
+
+  - control: test_a_struck_earlier_list_beside_the_live_one_passes
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      Struck text is left in when a list is read (D178), so a superseded list
+      kept struck through beside the live one doubles its opening phrase.
+    find: '    text = _RETIRED.sub(" ", specification)'
+    replace: '    text = specification'
+
+  - control: test_a_record_repeating_a_list_sentence_does_not_double_it
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      The harness side's lists are read from every file named for it rather
+      than from its specification (D178), so a decision record quoting a list
+      sentence doubles it.
+    find: '        harness_specification=harness_paths[0].read_text(encoding="utf-8"),'
+    replace: '        harness_specification=harness_text,'
+
+  - control: test_a_record_repeating_a_list_sentence_does_not_double_it
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      The tool side's lists are read from every file named for it rather than
+      from its specification (D178), so a decision record quoting a list
+      sentence doubles it.
+    find: '        tool_specification=tool_paths[0].read_text(encoding="utf-8"),'
+    replace: '        tool_specification=tool_text,'
+
+  - control: test_a_matching_pair_of_lists_agrees_exactly
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      The harness-only keys are not set aside from the harness's findings list
+      (D178), so a matching pair reports them as names the scanner does not
+      expect.
+    find: '                names = names - frozenset(HARNESS_ONLY_KEYS)'
+    replace: '                names = names'
+
+  - control: test_a_matching_pair_of_lists_agrees_exactly
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      A list with a closing phrase runs past it to its sentence's end (D178), so
+      the harness's field list takes in its row fields.
+    find: '        segment = segment[: segment.index(sentence.closes)]'
+    replace: '        segment = segment'
+
+  - control: test_a_missing_key_reaches_the_whole_check
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      The check a run prints leaves the lists uncompared (D178), so a missing key
+      passes the command while the function beside it still reports it.
+    find: '    problems = check_lists(harness_specification, tool_specification)'
+    replace: '    problems: list[str] = []'
+
+  - control: test_a_key_in_neither_list_is_named_as_missing_from_both
+    file: tools/check_spec_interface.py
+    control_file: tests/test_check_spec_interface.py
+    defect: >-
+      A key neither side lists is never reported (D178), because only a key one
+      side names and the other does not is compared.
+    find: '            elif not in_harness:'
+    replace: '            elif False:'
+
+  - control: test_the_retry_would_notice_a_second_fault_it_does_not_name
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      An empty rests_on is checked only when no identifier was rejected (D179),
+      so a synthesis citing T999 with an empty rests_on is corrected for T999
+      alone, which is P4-30.
+    find: '    if rendered.rests_on and reading.rests_on == ():'
+    replace: '    if rendered.rests_on and reading.rests_on == () and not rejected:'
+
+  - control: test_the_retry_would_notice_an_empty_citations_list_hiding_an_empty_rests_on
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      An empty rests_on is checked only when no other schema failure was found
+      (D179), so with both lists empty the correction names citations alone.
+    find: '    if rendered.rests_on and reading.rests_on == ():'
+    replace: '    if rendered.rests_on and reading.rests_on == () and not schema:'
+
+  - control: test_the_retry_would_notice_a_second_fault_it_does_not_name
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      The correction states one complaint, the rejected identifiers winning
+      (D179), so an answer with a schema failure beside them is never told of it.
+    find: '    if failure or not rejected:'
+    replace: '    elif failure or not rejected:'
+
+  - control: test_the_retry_would_notice_a_second_fault_it_does_not_name
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      A synthesis corrected for rejected identifiers and a schema failure
+      together is not shown its dimensions (D179), though the empty rests_on it
+      was told of is what they answer.
+    find: '    if dimensions and failure:'
+    replace: '    if dimensions and failure and not rejected:'
+
+  - control: test_the_retry_would_notice_rejected_identifiers_beside_a_missing_field
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      Rejected identifiers are computed only for an answer with no schema
+      failure (D179), so an answer missing a field is never told which
+      identifiers it invented.
+    find: '    rejected = invalid_citations(reading.citations, rendered.citable) if reading.citations else ()'
+    replace: '    rejected = invalid_citations(reading.citations, rendered.citable) if reading.citations and not schema else ()'
+
+  - control: test_an_exhausted_retry_would_notice_a_fault_left_out_of_its_last_failure
+    file: src/harness/judge/engine.py
+    control_file: tests/test_judge_engine.py
+    defect: >-
+      An errored result's last failure names the first fault alone (D179), so a
+      reader of the result cannot tell the retry left a second.
+    find: '        return "; ".join(parts) or None'
+    replace: '        return parts[0] if parts else None'
+
+  - control: test_every_readable_fault_is_named_not_the_first
+    file: src/harness/judge/citations.py
+    control_file: tests/test_judge_prompt.py
+    defect: >-
+      A missing declared field stops citations being read (D179), so an empty
+      citations list beside it goes unnamed.
+    find: '    if "citations" in payload:'
+    replace: '    if "citations" in payload and not missing:'
+
+  - control: test_the_history_check_would_notice_each_marker
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      The decision marker matches nothing (D180), so a caveat noting the decision
+      a criterion was added at passes the history check.
+    find: '    re.compile(r"\bAdded at D\d+"),'
+    replace: '    re.compile(r"MatchesNothingAtAll"),'
+
+  - control: test_the_history_check_would_notice_each_marker
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      The date marker matches nothing (D180), so a caveat dating when something
+      stopped being true passes the history check.
+    find: '    re.compile(r"\buntil \d{4}-\d{2}-\d{2}\b"),'
+    replace: '    re.compile(r"MatchesNothingAtAll"),'
+
+  - control: test_the_history_check_would_notice_each_marker
+    file: tools/verify_phase1.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      No marker is read (D180), so every caveat passes the history check.
+    find: '        for marker in HISTORY_MARKERS:'
+    replace: '        for marker in ():'
+
+  - control: test_a_held_out_run_would_notice_a_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The corpus version file carries no value to compare (D182), so a held-out run
+      left on the default stamps the design corpus's version into its header.
+    find: '        ("--corpus-version-file", args.corpus_version_file),'
+    replace: '        ("--corpus-version-file", ""),'
+
+  - control: test_a_held_out_runs_log_is_named_for_the_gate_that_admits_it
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      Every log is named alike (D184), so a held-out run writes a name the held-out
+      repository's gate does not admit and the rename returns.
+    find: '    prefix = "heldout-" if header.labels_manifest else ""'
+    replace: '    prefix = ""'
+
+  - control: test_a_report_over_held_out_calls_would_notice_an_out_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The report reads no declaration (D185), so no call is held out and a report over
+      held-out calls is written wherever --out points.
+    find: '            held_out_set = declared_held_out_calls(_resolve(_HELDOUT_SET, root))'
+    replace: '            held_out_set = frozenset()'
+
+  - control: test_a_report_over_held_out_calls_would_notice_an_out_path_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The path test is inverted (D185), so a report over held-out calls is refused
+      outside this checkout and written inside it.
+    find: '            if destination.resolve().is_relative_to(root.resolve()):'
+    replace: '            if not destination.resolve().is_relative_to(root.resolve()):'
+
+  - control: test_a_rendered_report_over_held_out_calls_is_found
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The report heading matches nothing (D185), so a rendered report over held-out
+      calls is not read as one.
+    find: '_REPORT_MARKER: Final[re.Pattern[str]] = re.compile(r"^# Evaluation report\s*$", re.MULTILINE)'
+    replace: '_REPORT_MARKER: Final[re.Pattern[str]] = re.compile(r"MatchesNothingAtAll")'
+
+  - control: test_a_design_report_is_not_mistaken_for_a_held_out_one
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      Any call id counts (D185), so a report over the design set is reported as
+      held-out output and the check cries wolf on this repository's own snapshot.
+    find: '    named = sorted({call for call in _ANY_CALL_ID.findall(rendered) if call in held_out})'
+    replace: '    named = sorted(set(_ANY_CALL_ID.findall(rendered)))'
+
+  - control: test_a_held_out_replay_writes_the_rubric_it_judged_under
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A held-out run writes no rubric hash (D183), so its log names the rubric it
+      judged under nowhere and the held-out gate has nothing to compare.
+    find: '        rubric_hash=rubric_hash(_resolve(args.rubric, root)) if args.labels_manifest else "",'
+    replace: '        rubric_hash="",'
+
+  - control: test_the_rubric_check_would_notice_a_log_judged_under_another_rubric
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      The comparison is inverted (D183), so a log judged under another rubric is
+      served and one judged under the same rubric is refused.
+    find: '    if logged.rubric_hash != current.rubric_hash:'
+    replace: '    if logged.rubric_hash == current.rubric_hash:'
+
+  - control: test_a_held_out_replay_would_notice_a_log_judged_under_another_rubric
+    file: src/harness/core/transport.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The same inverted comparison (D183), driving the other property it breaks: the
+      command serves answers from a log judged under another rubric rather than
+      refusing them, so the refusal reaches the command only in the unit test.
+    find: '    if logged.rubric_hash != current.rubric_hash:'
+    replace: '    if logged.rubric_hash == current.rubric_hash:'
+
+  - control: test_coverage_would_notice_a_finding_read_in_the_wrong_state
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      Every traced finding reads as retired whether or not an entry fired on its call
+      (D188), so a judged miss is counted as caught.
+    find: '        if any(reading == "fired" for _, reading in self.readings):'
+    replace: '        if True:'
+
+  - control: test_coverage_would_notice_its_design_section_miscounted
+    file: src/harness/coverage.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The same defect, driving the command's design section: F-85, which
+      `J-policy-alignment` is silent on, is counted retired and the low band reads 33
+      (D188).
+    find: '        if any(reading == "fired" for _, reading in self.readings):'
+    replace: '        if True:'
+
+  - control: test_coverage_would_notice_a_finding_read_in_the_wrong_state
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      A finding traced to no entry reads as missed rather than uncovered (D188), so a
+      gap in the rubric is reported as a failure of an entry.
+    find: '        if not self.readings:'
+    replace: '        if False:'
+
+  - control: test_coverage_would_notice_a_finding_read_in_the_wrong_state
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      An entry that gave no verdict reads as silent (D188), so a missed finding's
+      label hides that its entry errored.
+    find: '    if status is not Status.APPLICABLE:'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_its_bands_pooled_or_its_findings_misbanded
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      Every banded finding lands in the most severe band (D157, D188), so the bands
+      are pooled into one.
+    find: '            by_band[item.severity.severity].append((-item.severity.theta, item.finding.id, item))'
+    replace: '            by_band[BAND_ORDER[0]].append((-item.severity.theta, item.finding.id, item))'
+
+  - control: test_coverage_would_notice_an_unbanded_finding_left_out_or_counted_twice
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      An unplaced finding is also counted among the question-tier ones (D187, D188),
+      so the two causes of carrying no band are merged.
+    find: '            item for item in covered if item.severity is None and item.finding.id not in unplaced'
+    replace: '            item for item in covered if item.severity is None'
+
+  - control: test_coverage_would_notice_an_unbanded_finding_left_out_or_counted_twice
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      The findings with no band are never named (D187, D188), so they are left out of
+      the report as well as out of the bands.
+    find: '        lines += ["", f"no band: {len(group)} finding(s) {what}"]'
+    replace: '        lines += []'
+
+  - control: test_coverage_would_notice_an_input_it_cannot_cover
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      A traced id the set does not hold is not refused (D188), and the report fails on
+      it unnamed.
+    find: '    if strangers:'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_an_input_it_cannot_cover
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      A finding on a call the set does not read is covered anyway (D188), counted
+      missed though no entry read its call.
+    find: '    if elsewhere := sorted({finding.call_ref for finding in findings} - call_set):'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_a_finding_on_a_call_its_set_does_not_read
+    file: src/harness/coverage.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The same refusal skipped, driving the command: design transcripts missing a call
+      fail unnamed rather than being refused (D188).
+    find: '    if elsewhere := sorted({finding.call_ref for finding in findings} - call_set):'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_an_input_it_cannot_cover
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      An entry with no reading for one of the set's calls is not refused (D188), and
+      the report fails on it unnamed.
+    find: '        if unanswered := [call for call in calls if call not in by_call]:'
+    replace: '        if False:'
+
+  - control: test_the_coverage_section_would_notice_its_bands_pooled
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      The section prints one band's row (D157, D188), so the other three are read from
+      nothing.
+    find: '    for band in coverage.bands:'
+    replace: '    for band in coverage.bands[:1]:'
+
+  - control: test_coverage_would_notice_its_design_section_miscounted
+    file: src/harness/coverage.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The section names the retired and nothing else (D188), so the uncovered set is
+      never named.
+    find: '    for state in (RETIRED, UNCOVERED, MISSED):'
+    replace: '    for state in (RETIRED,):'
+
+  - control: test_coverage_would_notice_its_design_section_miscounted
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The design section is computed and never printed (D188).
+    find: '    for line in render_coverage(design, DESIGN_COVERAGE_CAVEAT):'
+    replace: '    for line in []:'
+
+  - control: test_coverage_would_notice_its_held_out_section_left_out
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The held-out section is computed and never printed, so the command says it was
+      not computed (D188).
+    find: '            held_out_lines = render_coverage(held, HELD_OUT_COVERAGE_CAVEAT)'
+    replace: '            pass'
+
+  - control: test_coverage_would_notice_its_held_out_section_left_out
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The held-out set is read against the rubric's design traces rather than its own
+      (D177, D188), which name no held-out finding.
+    find: '                traces.traces,'
+    replace: '                {entry.id: entry.traces_to for entry in rubric.entries},'
+
+  - control: test_coverage_would_notice_its_held_out_section_left_out
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The held-out set is banded by the design set's severity file rather than its own
+      (D177, D188).
+    find: '                load_severity(_resolve(args.held_out_severity, root)),'
+    replace: '                load_severity(_resolve(args.severity, root)),'
+
+  - control: test_coverage_would_notice_held_out_inputs_given_in_part
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      Some of the held-out inputs are accepted without the rest, and the command fails
+      on the missing severity export unnamed (D175, D188).
+    find: '    if given and len(given) != len(inputs):'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_held_out_inputs_given_in_part
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The coverage report's sixth input is left off its list (D188), so a missing
+      held-out severity export goes unnamed.
+    find: '    ("--held-out-severity", "held_out_severity"),'
+    replace: '    ("--held-out-traces", "held_out_traces"),'
+
+  - control: test_coverage_would_notice_a_held_out_input_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The command finds a held-out input inside the checkout and reads it anyway
+      (D174, D188).
+    find: '    if held_out_inside:'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_a_held_out_input_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      No held-out input is compared with the checkout, so a held-out severity export
+      is read from inside this tree (D174, D188).
+    find: '        and _resolve(getattr(args, name), root).resolve().is_relative_to(repository)'
+    replace: '        and False'
+
+  - control: test_coverage_would_notice_a_held_out_input_inside_the_checkout
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The coverage report's sixth input is left off its list (D188), so a held-out
+      severity export inside the checkout is never compared with it.
+    find: '    ("--held-out-severity", "held_out_severity"),'
+    replace: '    ("--held-out-traces", "held_out_traces"),'
+
+  - control: test_coverage_would_notice_a_severity_file_its_join_refuses
+    file: src/harness/core/severity.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The join lets a defect-tier finding the severity file does not name through
+      (D188), and coverage counts it with no band as though it were question-tier.
+    find: '    if orphans:'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_each_refusal_it_shares_with_agreement
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A design corpus holding a declared held-out call is covered, so the design
+      section reads held-out calls (D175, D188).
+    find: '    if not held_out and declared:'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_each_refusal_it_shares_with_agreement
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      Held-out transcripts holding an undeclared call are read as the held-out set
+      (D173, D188).
+    find: '    if held_out and declared != len(calls):'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_each_refusal_it_shares_with_agreement
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A held-out log naming no labels manifest is covered, though no held-out run
+      writes one (D173, D188).
+    find: '    if held_out and not logged.labels_manifest:'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_each_refusal_it_shares_with_agreement
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The held-out labels are never checked, so traces naming another frozen commit
+      are covered (D175, D188).
+    find: '    check_held_out_labels(traces, rubric, findings, calls)'
+    replace: '    pass'
+
+  - control: test_coverage_would_notice_each_refusal_it_shares_with_agreement
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      A replay that stopped part-way is covered over the calls it still answers, and
+      fails on the entries it lost unnamed (D175, D188).
+    find: '    if stopped:'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_an_out_flag_that_writes_a_file
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The command takes an --out flag (D188), so a held-out section can be written
+      wherever it points rather than to stdout alone.
+    find: '    coverage.add_argument("--policy-tool", default=_DEFAULT_POLICY_TOOL)'
+    replace: '    coverage.add_argument("--out", default="")'
+
+  - control: test_a_coverage_report_over_held_out_findings_is_found
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The coverage heading matches nothing (D188), so a coverage report over held-out
+      findings is not read as one.
+    find: '    r"^[\w-]+ set: coverage by severity\b", re.MULTILINE'
+    replace: '    r"MatchesNothingAtAll", re.MULTILINE'
+
+  - control: test_a_design_coverage_report_is_not_mistaken_for_a_held_out_one
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      Any finding id counts (D188), so a design section is reported as held-out labels
+      and the check cries wolf on the command's own output.
+    find: '_HELD_OUT_FINDING_ID: Final[re.Pattern[str]] = re.compile(r"\bHF-\d{2,}\b")'
+    replace: '_HELD_OUT_FINDING_ID: Final[re.Pattern[str]] = re.compile(r"\bH?F-\d{2,}\b")'
+
+  - control: test_the_check_reports_a_coverage_report_in_the_tree_it_scans
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The check leaves coverage reports out of its problems (D188), so what the scan
+      finds is reported by nothing.
+    find: '    for path, reason in sorted(scan_coverage_reports(REPO_ROOT).items()):'
+    replace: '    for path, reason in sorted({}.items()):'
+
+  - control: test_the_recheck_would_notice_a_finding_edited_after_scoring
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      The recheck compares nothing (D189), so a finding edited after its band was
+      placed reads as unmoved.
+    find: '        if record.id in by_id and finding_content_hash(by_id[record.id]) != record.content_hash'
+    replace: '        if False'
+
+  - control: test_the_recheck_would_notice_a_finding_edited_after_scoring
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      The hash stops stripping evidence fragments (D189), so whitespace the tool
+      ignores reads as a moved finding.
+    find: '        *(fragment.strip() for fragment in finding.evidence),'
+    replace: '        *finding.evidence,'
+
+  - control: test_every_scored_finding_still_matches_the_text_it_was_scored_against
+    file: src/harness/core/severity.py
+    control_file: tests/test_findings.py
+    defect: >-
+      The harness's definition of the hash drifts from the scoring tool's (D148,
+      D189): the suite now reads that definition rather than a copy of its own, so the
+      drift is the same red as a moved finding.
+    find: '    return hashlib.sha256("\x00".join(parts).encode("utf-8")).hexdigest()'
+    replace: '    return hashlib.sha256("\x01".join(parts).encode("utf-8")).hexdigest()'
+
+  - control: test_coverage_would_notice_a_band_on_text_that_moved
+    file: src/harness/core/severity.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      The recheck compares nothing (D189), so coverage counts a finding under a band
+      placed on wording it no longer has.
+    find: '        if record.id in by_id and finding_content_hash(by_id[record.id]) != record.content_hash'
+    replace: '        if False'
+
+  - control: test_coverage_would_notice_a_band_on_text_that_moved
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      Coverage never asks the recheck (D189), so a set holding a band on moved text is
+      covered anyway.
+    find: '    if moved := moved_since_scored(findings, severity):'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_a_findings_file_edited_after_scoring
+    file: src/harness/core/severity.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The recheck compares nothing (D189), so the command covers a findings file
+      edited after its bands were placed.
+    find: '        if record.id in by_id and finding_content_hash(by_id[record.id]) != record.content_hash'
+    replace: '        if False'
+
+  - control: test_coverage_would_notice_a_findings_file_edited_after_scoring
+    file: src/harness/coverage.py
+    control_file: tests/test_cli.py
+    defect: >-
+      Coverage never asks the recheck (D189), so the command covers a findings file
+      edited after its bands were placed.
+    find: '    if moved := moved_since_scored(findings, severity):'
+    replace: '    if False:'
+
+  - control: test_coverage_would_notice_a_band_split_wrong_by_detection_type
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      Every detection type's part holds the whole band (D192), so the split reports
+      each tier as covering every finding in it.
+    find: '            findings=tuple(f for f in self.findings if f.finding.detectable_by is kind),'
+    replace: '            findings=self.findings,'
+
+  - control: test_coverage_would_notice_its_design_section_miscounted
+    file: src/harness/coverage.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The same defect, driving the command's design section: the critical band's judge
+      part reads as the whole band rather than the one judge-type finding (D192).
+    find: '            findings=tuple(f for f in self.findings if f.finding.detectable_by is kind),'
+    replace: '            findings=self.findings,'
+
+  - control: test_coverage_would_notice_its_held_out_section_left_out
+    file: src/harness/coverage.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The same defect, driving the held-out section: the finding left untraced no
+      longer moves out of the critical band's assert part alone (D192).
+    find: '            findings=tuple(f for f in self.findings if f.finding.detectable_by is kind),'
+    replace: '            findings=self.findings,'
+
+  - control: test_the_coverage_section_would_notice_its_bands_pooled
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      The section prints no detection-type rows (D192), so which tier a band's
+      findings belong to is never shown.
+    find: '        for kind in DetectableBy:'
+    replace: '        for kind in ():'
+
+  - control: test_coverage_would_notice_its_design_section_miscounted
+    file: src/harness/coverage.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The same defect, driving the command: the design section's table carries no
+      detection-type rows (D192).
+    find: '        for kind in DetectableBy:'
+    replace: '        for kind in ():'
+
+  - control: test_the_register_would_notice_an_identifier_of_an_undeclared_shape
+    file: tests/test_corpus_hygiene.py
+    control_file: tests/test_corpus_hygiene.py
+    defect: >-
+      No token is compared with the declared shapes (D193), so an identifier of a
+      shape nobody declared passes.
+    find: '        if not any(pattern.fullmatch(token) for pattern in shapes.values())'
+    replace: '        if False'
+
+  - control: test_the_register_would_notice_an_identifier_of_an_undeclared_shape
+    file: corpus/entities.md
+    control_file: tests/test_corpus_hygiene.py
+    defect: >-
+      The register loses the refund identifier's shape (D193), which is the reveal
+      handover's second gap returning: RF- identifiers used and declared nowhere.
+    find: '| Refund identifier | `RF-#####` | What `issue_refund` returns as `refund_id`. |'
+    replace: '| Refund identifier | not declared | |'
+
+  - control: test_the_register_would_notice_an_identifier_of_an_undeclared_shape
+    file: corpus/entities.md
+    control_file: tests/test_corpus_hygiene.py
+    defect: >-
+      The register loses the specialist identifier's shape (D193), the fifth shape the
+      widened check found, so CALL-20's SP- identifier is declared nowhere.
+    find: '| Specialist identifier | `SP-####` | The specialist who accepted a handoff, as `transfer_to_specialist` returns it in `accepted_by`. |'
+    replace: '| Specialist identifier | not declared | |'
+
+  - control: test_the_register_would_notice_a_settlement_token_it_does_not_declare
+    file: tests/test_corpus_hygiene.py
+    control_file: tests/test_corpus_hygiene.py
+    defect: >-
+      No settlement is compared with the declared tokens (D193), so a processor the
+      register does not know passes.
+    find: '        if token not in declared'
+    replace: '        if False'
+
+  - control: test_the_register_would_notice_a_settlement_token_it_does_not_declare
+    file: corpus/entities.md
+    control_file: tests/test_corpus_hygiene.py
+    defect: >-
+      Class 5 names Cardinal Pay without its machine token (D193), which is the reveal
+      handover's first gap returning: the corpus's settlement token declared nowhere.
+    find: '| **Cardinal Pay** | Card payment processor | Invented name, **real service class**. Card refunds are submitted, then settle through the card networks — days, not minutes, and no instant reversal. `refund.v1 § 3.2` states five business days. Appears in tool results as the settlement token `cardinal_pay`. |'
+    replace: '| **Cardinal Pay** | Card payment processor | Invented name, **real service class**. Card refunds are submitted, then settle through the card networks — days, not minutes, and no instant reversal. `refund.v1 § 3.2` states five business days. |'
+
+  - control: test_the_sweep_marker_names_a_changelog_entry_that_records_a_sweep
+    file: tests/test_document_counts.py
+    control_file: tests/test_document_counts.py
+    defect: >-
+      A marker's changelog entry is never read for a sweep (D194), so a decision's
+      bump can move the marker and claim a sweep again, which is P5-7 returning.
+    find: '    if _SWEEP_TAG not in entry.group(0):'
+    replace: '    if False:'
+
+  - control: test_the_sweep_marker_names_a_changelog_entry_that_records_a_sweep
+    file: tests/test_document_counts.py
+    control_file: tests/test_document_counts.py
+    defect: >-
+      Every marker is read as history from before the rule (D194), so no marker is
+      ever asked for a sweep entry at all.
+    find: '    if _version(swept.group(1)) < _SWEEP_ENTRIES_FROM:'
+    replace: '    if True:'
+
+  - control: test_every_reading_finds_its_artifact_as_a_powershell_redirect_writes_it
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      UTF-8 with a byte-order mark is decoded as plain UTF-8 (D195), so the mark stays
+      in front of line 1 and a heading there stops matching, which is P5-1 returning.
+    find: '    (b"\xef\xbb\xbf", "utf-8-sig"),'
+    replace: '    (b"\xef\xbb\xbf", "utf-8"),'
+
+  - control: test_every_reading_finds_its_artifact_as_a_powershell_redirect_writes_it
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      UTF-16 is decoded as UTF-8 (D195), so a file a PowerShell 5.1 redirect wrote is
+      read by no reading at all, which is P5-1 returning.
+    find: '    (b"\xff\xfe", "utf-16"),'
+    replace: '    (b"\xff\xfe", "utf-8"),'
+
+  - control: test_a_file_no_reading_can_decode_is_reported_rather_than_skipped
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A file no reading can decode is not reported (D195), so the check prints OK over
+      a file it never looked inside, as it did over two logs in build/.
+    find: '            unreadable.append(path)'
+    replace: '            pass'
+
+  - control: test_a_file_no_reading_can_decode_is_reported_rather_than_skipped
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      Files binary by name are decoded and reported too (D195), so every image in the
+      tree would fail the check for being an image.
+    find: '        if path.suffix.lower() in _BINARY_SUFFIXES:'
+    replace: '        if False:'
+
+  - control: test_a_run_log_record_laid_out_across_lines_is_found
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A header laid out across lines is not read as a JSON value (D195), so a
+      pretty-printed held-out header passes, which is P5-4's first case returning.
+    find: '            if mapping.get("record") == "header" and "labels_manifest" in mapping:'
+    replace: '            if False:'
+
+  - control: test_a_run_log_record_laid_out_across_lines_is_found
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A JSON object naming a declared call is not reported (D195), so a call record
+      laid out across lines passes.
+    find: '            if isinstance(call, str) and call in held_out:'
+    replace: '            if False:'
+
+  - control: test_an_extraction_artifact_over_a_declared_call_is_found
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A JSON object naming a declared call is not reported (D195), so an extraction
+      artifact over a held-out call, every turn of it, passes.
+    find: '            if isinstance(call, str) and call in held_out:'
+    replace: '            if False:'
+
+  - control: test_held_out_labels_are_found_in_their_own_structure
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A mapping whose id has the held-out shape is not read as a label (D195), so the
+      held-out findings file and severity export pass.
+    find: '    if isinstance(ident, str) and _HELD_OUT_FINDING_ID.fullmatch(ident):'
+    replace: '    if False:'
+
+  - control: test_held_out_labels_are_found_in_their_own_structure
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A traces file's lists are not read (D195), so the held-out traces pass.
+    find: '    listed = list(traced.values()) if isinstance(traced, dict) else []'
+    replace: '    listed = []'
+
+  - control: test_held_out_labels_are_found_in_their_own_structure
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      A findings view is not recognized by its per-finding heading (D195), so the view
+      rendered over held-out labels passes.
+    find: '    if _VIEW_FINDING.search(labels) is not None:'
+    replace: '    if False:'
+
+  - control: test_design_labels_or_a_document_naming_a_held_out_id_are_not_mistaken_for_held_out_ones
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      Any mapping in a file naming a held-out id is read as a label (D195), so a
+      document mentioning one fails the check.
+    find: '            if _names_a_held_out_finding(mapping):'
+    replace: '            if True:'
+
+  - control: test_agreements_held_out_section_is_found_and_its_design_section_is_not
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      Agreement's held-out heading is matched only at the start of a file (D195), so a
+      section pasted below anything passes.
+    find: '    r"^held-out set: \d+ calls, \d+ rubric entries$", re.MULTILINE'
+    replace: '    r"^held-out set: \d+ calls, \d+ rubric entries$", 0'
+
+  - control: test_the_check_reports_labels_agreement_and_an_undecodable_file_in_the_tree_it_scans
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The check never reports what its label reading finds (D195), so the reading is
+      unwired while the tests that call it stay green.
+    find: '    for path, reason in sorted(scan_labels(REPO_ROOT).items()):'
+    replace: '    for path, reason in ():'
+
+  - control: test_the_check_reports_labels_agreement_and_an_undecodable_file_in_the_tree_it_scans
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The check never reports what its agreement reading finds (D195).
+    find: '    for path, reason in sorted(scan_agreement_sections(REPO_ROOT).items()):'
+    replace: '    for path, reason in ():'
+
+  - control: test_the_check_reports_labels_agreement_and_an_undecodable_file_in_the_tree_it_scans
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The check never reports a file it could not decode (D195), which is P5-1
+      returning in the check itself rather than in its scan.
+    find: '    for path in scan_unreadable(REPO_ROOT):'
+    replace: '    for path in ():'
+
+  - control: test_tool_generated_trees_are_skipped
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The tool-generated trees are entered rather than pruned (D195), so a transcript
+      under .venv or .git is reported and every scan walks thousands of files it
+      discards.
+    find: '        subdirectories[:] = [name for name in subdirectories if name not in _SKIP_DIRS]'
+    replace: '        subdirectories[:] = list(subdirectories)'
+
+  - control: test_extraction_over_a_declared_call_refuses_an_out_path_inside_the_checkout
+    file: src/harness/extract.py
+    control_file: tests/test_held_out_writes.py
+    defect: >-
+      Extraction never asks whether its calls are held out (D196), so an artifact over
+      the held-out transcripts is written into this tree, which is P5-2 returning.
+    find: '        held_out=any_held_out((call.record.call_id for call in calls), held_out_set),'
+    replace: '        held_out=False,'
+
+  - control: test_extraction_is_refused_when_the_declaration_cannot_be_read
+    file: src/harness/extract.py
+    control_file: tests/test_held_out_writes.py
+    defect: >-
+      A missing HELDOUT_SET reads as a corpus with no held-out set (D196), so a
+      command that cannot tell refuses nothing instead of refusing everything.
+    find: '        held_out_set = declared_held_out_calls(root / HELDOUT_SET_FILE)'
+    replace: '        held_out_set = frozenset()'
+
+  - control: test_the_view_over_held_out_labels_refuses_an_out_path_inside_the_checkout
+    file: src/harness/findings_view.py
+    control_file: tests/test_held_out_writes.py
+    defect: >-
+      The view never asks whether its findings are held out (D196), so a view over
+      held-out labels overwrites the tracked design view.
+    find: '            held_out=held_out,'
+    replace: '            held_out=False,'
+
+  - control: test_the_view_over_held_out_labels_refuses_an_out_path_inside_the_checkout
+    file: src/harness/findings_view.py
+    control_file: tests/test_held_out_writes.py
+    defect: >-
+      A finding's id is not read for the held-out shape (D196), so held-out labels on
+      a design call's number pass the view's mark.
+    find: '            HELD_OUT_FINDING_ID.fullmatch(finding.id) for finding in findings'
+    replace: '            False for finding in findings'
+
+  - control: test_the_design_view_still_writes_inside_the_checkout_and_check_is_not_refused
+    file: src/harness/findings_view.py
+    control_file: tests/test_held_out_writes.py
+    defect: >-
+      The refusal runs for `--check` too (D196), so the one mode that writes nothing
+      is refused and CI's staleness check fails over held-out labels.
+    find: '    if not args.check:'
+    replace: '    if True:'
+
+  - control: test_the_refusal_reads_both_halves_of_its_rule
+    file: src/harness/heldout.py
+    control_file: tests/test_held_out_writes.py
+    defect: >-
+      A destination outside this checkout is refused as well (D196), so the rule stops
+      being about where the output goes.
+    find: '    if not destination.resolve().is_relative_to(root.resolve()):'
+    replace: '    if False:'
+
+  - control: test_extraction_over_the_design_set_still_writes_inside_the_checkout
+    file: src/harness/heldout.py
+    control_file: tests/test_held_out_writes.py
+    defect: >-
+      Output that is not held out is refused too (D196), so the design artifact CI
+      writes on every run is refused inside the checkout.
+    find: '    if not held_out:'
+    replace: '    if False:'
+
+  - control: test_agreement_and_coverage_refuse_a_held_out_log_judged_under_another_rubric
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The two commands that score the held-out labels do not compare the rubric hash
+       their log names (D197), so a log judged under another rubric, or under none, is
+       replayed and counted, which is P5-5 returning.
+    find: '        if logged.rubric_hash != current:'
+    replace: '        if False:'
+
+  - control: test_a_header_missing_a_field_is_refused_as_a_damaged_log
+    file: src/harness/core/transport.py
+    control_file: tests/test_transport.py
+    defect: >-
+      A header missing a field is no longer caught (P5-16), so it escapes as a
+      KeyError and a traceback from every command that reads a log.
+    find: '    except KeyError as exc:'
+    replace: '    except ValueError as exc:'
+
+  - control: test_the_log_reading_commands_refuse_a_damaged_header_and_offer_no_flag_they_lack
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      The staleness refusal is not reworded for the two measurement commands (P5-16),
+      so each ends by offering --allow-stale-replay, which neither takes.
+    find: '    except StaleReplayLogError as exc:'
+    replace: '    except AgreementError as exc:'
+
+  - control: test_the_check_reports_a_rendered_report_in_the_tree_it_scans
+    file: tools/check_holdout_absence.py
+    control_file: tests/test_holdout_absence.py
+    defect: >-
+      The check never reports what its report reading finds (P5-6), so the reading is
+      unwired while the two tests that call it directly stay green.
+    find: '    for path, reason in sorted(scan_reports(REPO_ROOT, frozenset(held_out)).items()):'
+    replace: '    for path, reason in ():'
+
+  - control: test_agreement_and_coverage_read_the_held_out_policies_they_are_given
+    file: src/harness/cli.py
+    control_file: tests/test_cli.py
+    defect: >-
+      --held-out-policies is not read (P5-6), so the held-out calls are scored against
+      the design set's policies whatever the flag names.
+    find: '    return str(args.held_out_policies or args.policies)'
+    replace: '    return str(args.policies)'
+
+  - control: test_coverage_refuses_an_entry_with_no_traces_row_and_one_with_no_readings
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      An entry with no traces row is not refused (P5-6), so its findings fall into the
+      uncovered set and a figure about the rubric reads as one about the corpus.
+    find: '    if untraced_entries := [entry.id for entry in rubric.entries if entry.id not in traces]:'
+    replace: '    if untraced_entries := []:'
+
+  - control: test_coverage_refuses_an_entry_with_no_traces_row_and_one_with_no_readings
+    file: src/harness/coverage.py
+    control_file: tests/test_coverage.py
+    defect: >-
+      An entry with no readings at all is not refused (P5-6), so it counts as having
+      caught nothing.
+    find: '    if unread_entries := [entry.id for entry in rubric.entries if entry.id not in readings]:'
+    replace: '    if unread_entries := []:'
+
+  - control: test_the_traces_file_would_notice_a_duplicate_id_or_a_frozen_commit_that_is_not_a_string
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A traces list naming a finding twice is accepted (P5-6), so one trace counts as
+      two.
+    find: '    if len(set(value)) != len(value):'
+    replace: '    if False:'
+
+  - control: test_the_traces_file_would_notice_a_duplicate_id_or_a_frozen_commit_that_is_not_a_string
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      A rubric-frozen-v1 that is not a string is accepted (P5-6), so the labels are
+      refused for the wrong reason further down.
+    find: '    if not isinstance(frozen, str):'
+    replace: '    if False:'
+
+  - control: test_the_totals_row_sums_each_column_into_its_own
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      The totals row prints the misses column twice (P5-6), so the false alarms a set
+      recorded are never shown.
+    find: '        f"{sum(r.misses for r in rows):>5} {sum(r.false_alarms for r in rows):>6} "'
+    replace: '        f"{sum(r.misses for r in rows):>5} {sum(r.misses for r in rows):>6} "'
+
+  - control: test_the_firing_tables_and_agreements_expected_calls_differ_only_where_recorded
+    file: src/harness/agreement.py
+    control_file: tests/test_agreement.py
+    defect: >-
+      Agreement's expected calls are empty for every entry (P5-9), so the two
+      definitions of where a deterministic entry should fire are never compared and
+      every firing reads as a false alarm.
+    find: '        expected[entry.id] = frozenset(findings[finding].call_ref for finding in entry.traces_to)'
+    replace: '        expected[entry.id] = frozenset()'
+
+  - control: test_the_register_would_notice_a_result_vocabulary_value_it_does_not_declare
+    file: tests/test_corpus_hygiene.py
+    control_file: tests/test_corpus_hygiene.py
+    defect: >-
+      No value is compared with the declared vocabulary (D198), so a reason code the
+      register does not know passes.
+    find: '        if key in _VOCABULARY_KEYS and value not in declared'
+    replace: '        if False'
+
+  - control: test_the_register_would_notice_a_result_vocabulary_value_it_does_not_declare
+    file: corpus/entities.md
+    control_file: tests/test_corpus_hygiene.py
+    defect: >-
+      The register loses the remedy it declares (D198), so CALL-01's
+      remedy=reversal_by_current_holder is declared nowhere, which is P5-11 returning.
+    find: '`reversal_by_current_holder` — a reason code is where the platform says *why*, so a value the'
+    replace: 'nothing else — a reason code is where the platform says *why*, so a value the'
+
+  - control: test_the_close_check_reads_a_status_line_in_either_form_this_project_writes
+    file: tests/test_document_counts.py
+    control_file: tests/test_document_counts.py
+    defect: >-
+      The close check reads only the status line phases 3 and 4 write (D199), so a
+      handover written the other way closes with the sweep clause never evaluated,
+      which is the sweep's S-1 returning.
+    find: '    r"^\*\*Status:?(?:\*\*)?:?\s*closed", re.MULTILINE | re.IGNORECASE'
+    replace: '    r"^\*\*Status:?\s*closed", re.MULTILINE | re.IGNORECASE'
+
+  - control: test_every_design_calls_retell_stream_differs_from_the_text_stream_only_where_declared
+    file: src/harness/corpus/retell_adapter.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      The second adapter drops every tool result's detail (D203), an undeclared
+      difference from the text adapter's stream that a comparison reading only
+      declared gaps would pass.
+    find: '    detail = detail_raw.strip() or None if detail_raw else None'
+    replace: '    detail = None'
+
+  - control: test_the_stream_comparison_would_notice_a_gap_filled_or_a_difference_undeclared
+    file: tests/test_retell_adapter.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      The two streams are never compared (D203), so a tool event given a timing
+      its source does not carry, and a result that lost its detail, both read as
+      identical where carried.
+    find: '    if _canonical(expected.events) != _canonical(retell.events):'
+    replace: '    if False:'
+
+  - control: test_the_adapter_would_notice_a_value_outside_its_declared_mapping
+    file: src/harness/corpus/retell_adapter.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      A tool status outside the declared mapping is no longer refused by name
+      (D203), which is the first step of reading an unknown as a known failure.
+    find: '    if token not in tool_statuses:'
+    replace: '    if False:'
+
+  - control: test_the_adapter_would_notice_a_tool_result_with_no_success_flag
+    file: src/harness/corpus/retell_adapter.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      A tool result with no success flag is given one (D203), so a defaulted
+      confirmation reads as a recorded one and can never disagree with its status.
+    find: '    successful = _require(path, entry, "successful", bool, where)'
+    replace: '    successful = bool(entry.get("successful", True))'
+
+  - control: test_the_adapter_reads_the_document_it_is_given
+    file: src/harness/corpus/retell_adapter.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      An utterance's words never reach the stream (D203): the adapter stops
+      reading the document it was given, which the byte comparison alone cannot
+      tell from reading the transcript beside it.
+    find: '        body=content.strip(),'
+    replace: '        body="unread",'
+
+  - control: test_the_documented_field_check_would_notice_a_field_nobody_documented
+    file: tests/test_retell_adapter.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      No field is compared with Retell's documented table (D203), so a source
+      document that grew an answered-at stamp, or timing on a tool entry, passes
+      as the platform's shape.
+    find: '            if key not in table:'
+    replace: '            if False:'
+
+  - control: test_the_regeneration_check_would_notice_a_stale_document
+    file: tools/make_retell_documents.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      A committed source document is never compared with its regeneration (D203),
+      so the documents drift from the transcripts they were generated from with
+      nothing said.
+    find: '        if committed != text:'
+    replace: '        if False:'
+
+  - control: test_build_context_would_notice_a_call_that_declares_a_gap
+    file: src/harness/core/context.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      A call declaring a gap is handed to the checks (D203), which read an absent
+      answered-at as the text None and a source with no lifecycle as a missing
+      call.ended.
+    find: '    if call.unavailable:'
+    replace: '    if False:'
+
+  - control: test_the_gap_check_would_notice_a_stream_and_a_declaration_that_disagree
+    file: src/harness/core/gaps.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      A tool event with no timing is accepted on a call that declares no timing
+      gap (D203), so an absence nobody declared is one step from being read as
+      zero.
+    find: '    if untimed_tools and Gap.TOOL_TIMING not in declared:'
+    replace: '    if False:'
+
+  - control: test_a_timing_check_would_notice_an_absent_time_read_as_a_number
+    file: src/harness/checks/conduct.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      The silence check skips an event with no timing instead of saying what is
+      missing (D203), so a gap the source never recorded reads as a call with no
+      silence in it.
+    find: '    if untimed:'
+    replace: '    if False:'
+
+  - control: test_a_retell_artifact_names_its_adapter_and_its_gaps_and_a_text_one_names_neither
+    file: src/harness/core/artifact.py
+    control_file: tests/test_retell_adapter.py
+    defect: >-
+      Every call's artifact entry carries the gap list, empty or not (D203), which
+      moves the text artifact's bytes and the content hash every committed log is
+      stamped with.
+    find: '    if call.unavailable:'
+    replace: '    if True:'
+
+  - control: test_the_retry_metric_would_notice_an_identifier_shown_and_not_citable
+    file: src/harness/inspector.py
+    control_file: tests/test_inspector.py
+    defect: >-
+      A citable line is any tag anywhere in the prompt (D205), so an identifier
+      quoted inside another dimension's rationale counts as one the model was
+      allowed to cite.
+    find: '_CITABLE_LINE: Final[re.Pattern[str]] = re.compile(r"^\[([TF]\d+)\]", re.MULTILINE)'
+    replace: '_CITABLE_LINE: Final[re.Pattern[str]] = re.compile(r"\[([TF]\d+)\]", re.MULTILINE)'
+
+  - control: test_the_retry_metric_would_notice_a_validator_rejecting_what_its_prompt_rendered
+    file: src/harness/inspector.py
+    control_file: tests/test_inspector.py
+    defect: >-
+      A retry the log cannot explain is never counted (D205), which is W1's
+      signature going unreported by the instrument built to read it from the log
+      alone.
+    find: '        if not reasons:'
+    replace: '        if False:'
+
+  - control: test_the_integrity_metrics_would_notice_each_kind_of_damage
+    file: src/harness/inspector.py
+    control_file: tests/test_inspector.py
+    defect: >-
+      Every blob is counted as re-hashing to the hash it is filed under (D205), so
+      a log edited after it was written measures as sound.
+    find: '                if blob_hash(content) == digest:'
+    replace: '                if True:'
+
+  - control: test_the_repetition_metrics_would_notice_a_gap_and_a_second_retry
+    file: src/harness/inspector.py
+    control_file: tests/test_inspector.py
+    defect: >-
+      A group holding two retries is never counted (D205), so a run that spent
+      more than the single informed retry measures as within its budget.
+    find: '        if len(retries) > 1:'
+    replace: '        if False:'
+
+  - control: test_every_value_the_inspector_emits_is_a_count_or_a_proportion_with_both_its_terms
+    file: src/harness/inspector.py
+    control_file: tests/test_inspector.py
+    defect: >-
+      A proportion is printed as a percentage (D205), a figure that has lost both
+      its terms and reads as a score.
+    find: '        return f"{self.name}: {self.numerator} of {self.denominator}"'
+    replace: '        return f"{self.name}: {100 * self.numerator // max(self.denominator, 1)}%"'
+
+  - control: test_the_inspector_refuses_only_a_file_it_cannot_read
+    file: src/harness/inspector.py
+    control_file: tests/test_inspector.py
+    defect: >-
+      A file with no header is inspected as a run log (D205), so metrics are
+      printed over something that is not one.
+    find: '    if not records or records[0].get("record") != "header":'
+    replace: '    if False:'
+
+  - control: test_the_committed_reference_log_measures_what_is_recorded
+    file: src/harness/inspector.py
+    control_file: tests/test_inspector.py
+    defect: >-
+      Every entry-call pair is counted as sharing one request hash (D205), so the
+      synthesis's resampled prompts, 16 pairs of the committed log, measure as
+      byte-identical.
+    find: '        if len({attempt.get("request_hash") for attempt in attempts}) == 1:'
+    replace: '        if True:'
+
+  - control: test_no_property_turning_true_lowers_a_band
+    file: src/harness/instance_severity.py
+    control_file: tests/test_instance_severity.py
+    defect: >-
+      A handoff completing raises a band instead of lowering it (D206): one
+      property enters the decision list negated, and the result stops being an
+      ordering by realized harm.
+    find: '    if (money and wrote) or (misinformed and unattended):'
+    replace: '    if (money and wrote) or (misinformed and not unattended):'
+
+  - control: test_what_happened_is_read_from_the_evidence_point_on
+    file: src/harness/instance_severity.py
+    control_file: tests/test_instance_severity.py
+    defect: >-
+      A write anywhere in the call counts as following the defect (D206), so an
+      instance inherits the gravity of a refund that completed before it happened.
+    find: '        and invocation.result.index >= point'
+    replace: '        and invocation.result.index >= 0'
+
+  - control: test_the_properties_check_would_notice_an_entry_undeclared_and_a_declaration_orphaned
+    file: src/harness/instance_severity.py
+    control_file: tests/test_instance_severity.py
+    defect: >-
+      A rubric entry with no declared properties is accepted (D206), so an entry
+      added later is banded by silence.
+    find: '    if silent := sorted(declared - set(entries) - set(excluded)):'
+    replace: '    if silent := sorted(set[str]()):'
+
+  - control: test_one_entry_receives_different_bands_on_two_calls_that_differ_in_what_happened
+    file: src/harness/instance_severity.py
+    control_file: tests/test_instance_severity.py
+    defect: >-
+      What happened in the call is never read (D206), so every instance of an
+      entry receives one band and the severity is per entry under another name.
+    find: '        **instance_facts(call, evidence_point(evidence), declared.lists),'
+    replace: '        **dict.fromkeys(INSTANCE_PROPERTIES, False),'
+
+  - control: test_harness_severity_prints_a_band_for_every_instance_of_the_design_set
+    file: src/harness/instance_severity.py
+    control_file: tests/test_instance_severity.py
+    defect: >-
+      An excluded entry's reason is never printed (D206), so the synthesis drops out
+      of the bands with nothing said about why, which is an exemption rather than a
+      declaration.
+    find: '        lines += ["", f"excluded: {entry_id} -- {'' ''.join(reason.split())}"]'
+    replace: '        lines += [""]'
+
+  - control: test_the_judged_firing_comparison_would_notice_a_firing_that_moved
+    file: tests/test_judged_firing.py
+    control_file: tests/test_judged_firing.py
+    defect: >-
+      No judged entry's firing set is compared with the table (D202), so a re-
+      recording that moves a firing passes.
+    find: '        if calls != EXPECTED_FIRING.get(entry_id, frozenset())'
+    replace: '        if False'
+
+  - control: test_every_judged_entry_fires_where_the_committed_reference_log_is_recorded_as_firing
+    file: tests/test_judged_firing.py
+    control_file: tests/test_judged_firing.py
+    defect: >-
+      The table says J-unnecessary-repetition fires on a call it is silent on
+      (D202), which is the table drifting from the committed reference log.
+    find: '    "J-unnecessary-repetition": frozenset({"CALL-12"}),'
+    replace: '    "J-unnecessary-repetition": frozenset({"CALL-07"}),'
+
+  - control: test_the_license_check_would_notice_a_path_the_readme_does_not_name
+    file: tests/test_phase6_acceptance.py
+    control_file: tests/test_phase6_acceptance.py
+    defect: >-
+      A top-level path named in no row of the README's table is accepted (D201),
+      so a new tree arrives with no license and no decision that it has none.
+    find: '        elif name not in stated:'
+    replace: '        elif False:'
+
+  - control: test_the_readme_names_a_license_for_every_top_level_path
+    file: README.md
+    control_file: tests/test_phase6_acceptance.py
+    defect: >-
+      The README loses the row licensing HELDOUT_SET (D201), so a tracked top-
+      level path is covered by no license statement.
+    find: '| `HELDOUT_SET` | the held-out calls'' identifiers, declared here because nothing in this repository can discover them | CC BY 4.0 |'
+    replace: '| a path that is not there | nothing | CC BY 4.0 |'
+
+  - control: test_phase_6_declares_what_needs_a_model_call_and_the_design_document
+    file: tools/verify_phase6.py
+    control_file: tests/test_phase3_acceptance.py
+    defect: >-
+      The phase-6 verifier stops declaring the design document's criterion (D201),
+      so a deliverable nobody has written is claimed by nothing.
+    find: '        spec_anchor="The design document exists under `specs/`",'
+    replace: '        spec_anchor="The design document exists somewhere",'
+
+  - control: test_the_license_check_reads_this_repositorys_trees_and_not_a_sibling_checkout
+    file: tests/test_phase6_acceptance.py
+    control_file: tests/test_phase6_acceptance.py
+    defect: >-
+      A directory carrying its own `.git` is read as a tree of this repository
+      (D207), so CI's checkout of the sibling is an unlicensed top-level path and
+      the build is red on a true claim about the wrong population.
+    find: '    return entry.is_dir() and (entry / ".git").exists()'
+    replace: '    return False'
+
+  - control: test_every_published_object_hashes_to_the_id_it_claims
+    file: freeze-proof/freeze-commit.txt
+    control_file: tests/test_freeze_proof.py
+    defect: >-
+      One byte of the published freeze commit moves, so the object stops hashing to
+      the id the held-out repository's seal cites, and the proof that the rubric was
+      frozen before those labels existed no longer resolves (D209). This is the shape
+      a proof rots in: the file still reads as a commit.
+    find: 'tree 11319cedc6fdf66dc9f53dac12453ffb876861e9'
+    replace: 'tree 11319cedc6fdf66dc9f53dac12453ffb8768610'
+
+  - control: test_the_frozen_blobs_are_the_files_at_head
+    file: rubric.yaml
+    control_file: tests/test_freeze_proof.py
+    defect: >-
+      The rubric stops being the blob the freeze named, while the held-out labels are
+      still scored against the frozen text. A comment is mutated deliberately: the
+      check reads this file's bytes rather than its meaning, which is the only
+      reading a hash supports, and the public snapshot's own pin cannot make this
+      comparison at all.
+    find: '# The rubric.'
+    replace: '# The rubric, with one comment byte moved.'
+
+  - control: test_the_proof_readme_names_the_digests_the_files_have
+    file: freeze-proof/README.md
+    control_file: tests/test_freeze_proof.py
+    defect: >-
+      The SHA-256 the proof publishes for the freeze commit goes stale, so a reader
+      following the recipe computes a digest the document does not carry. The bytes
+      are intact and the instructions for checking them are wrong, which is worse
+      than a missing digest: it reads as a failed verification.
+    find: '| commit | `freeze-commit.txt` | `6d3a7101aaa1f15b440de43fe5142434f69c9dc9` | `2158f0a9b7855ee448c4f9e3e92daa3145ea9f50dbcf8216269236622249e415` | 1,363 B |'
+    replace: '| commit | `freeze-commit.txt` | `6d3a7101aaa1f15b440de43fe5142434f69c9dc9` | `2158f0a9b7855ee448c4f9e3e92daa3145ea9f50dbcf8216269236622249e410` | 1,363 B |'
+
+  - control: test_the_frozen_src_reconstructs_from_the_published_objects
+    file: freeze-proof/objects/8b5876692b985c1f525be1c280b3894d17531eee
+    control_file: tests/test_freeze_proof.py
+    defect: >-
+      A published object of the frozen src tree stops being the object its own
+      file name says it is, so the reconstruction the held-out gate needs would
+      be of code the freeze did not name (D210). The walk must refuse rather than
+      write it: a reconstruction that copies whatever it finds proves only that
+      files were copied.
+    find: '"""Rendering a judge prompt: two tagged populations, one untrusted block.'
+    replace: '"""Rendering a judge prompt: two tagged populations, one untrusted block, moved.'
+
+  - control: test_the_frozen_code_computes_the_frozen_template_hash
+    file: prompts/judge-dimension.v1.md
+    control_file: tests/test_freeze_proof.py
+    defect: >-
+      The judge template moves, so the frozen code no longer computes the hash the
+      proof publishes and the reference run log recorded. Every object id stays
+      intact and only the computation's answer changes, which is the failure the
+      four core objects cannot see. The mutation lands in the instruction
+      hierarchy, inside a sent half: the gate refused an earlier one in the
+      template's comment header, because `_strip_comments` takes that out before
+      hashing -- what is hashed is what is sent.
+    find: 'Every instruction you have is in this message. The next message contains **data'
+    replace: 'Every instruction you have is in this message. The next message holds **data'

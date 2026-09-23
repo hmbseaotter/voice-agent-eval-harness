@@ -1,0 +1,72 @@
+{
+  "schema_version": "3",
+  "anchor_set_version": "1",
+  "comparison_log_hash": "01ab8a59dbd7a0027f4c1e6b93d5a8110c4f2e77d9b3a6015e8c47f0d2b91a63",
+  "run_id": "4f2c9a10be77d3e5",
+  "calibration": {
+    "critical_high": "Critical means the caller acts on a false statement about their booking.",
+    "high_medium": "High means the caller is materially misinformed but can still recover.",
+    "medium_low": "Medium means the caller is inconvenienced without being misinformed."
+  },
+  "severities": [
+    {
+      "id": "F-90",
+      "severity": "critical",
+      "theta": 2.5,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "appearances": 10,
+      "informative": 8
+    },
+    {
+      "id": "F-93",
+      "severity": "high",
+      "theta": 1.0,
+      "content_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "appearances": 10,
+      "informative": 7
+    },
+    {
+      "id": "F-94",
+      "severity": "medium",
+      "theta": 0.0,
+      "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "appearances": 10,
+      "informative": 6
+    },
+    {
+      "id": "F-95",
+      "severity": "low",
+      "theta": -1.0,
+      "content_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "appearances": 10,
+      "informative": 9
+    }
+  ],
+  "unplaced": [
+    "F-92"
+  ],
+  "cuts": [
+    {
+      "name": "critical_high",
+      "above_id": "F-90",
+      "below_id": "F-93",
+      "gap": 1.5,
+      "between": []
+    },
+    {
+      "name": "high_medium",
+      "above_id": "F-93",
+      "below_id": "F-94",
+      "gap": 1.0,
+      "between": []
+    },
+    {
+      "name": "medium_low",
+      "above_id": "F-94",
+      "below_id": "F-95",
+      "gap": 1.0,
+      "between": []
+    }
+  ],
+  "tool_version": "0.7.0"
+}

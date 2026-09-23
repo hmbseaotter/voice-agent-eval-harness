@@ -1,0 +1,1079 @@
+{
+  "call_type": "phone_call",
+  "call_id": "CALL-10",
+  "agent_id": "verso-support",
+  "agent_version": 1,
+  "call_status": "ended",
+  "direction": "inbound",
+  "from_number": "+14155550116",
+  "to_number": "+14155550100",
+  "start_timestamp": 1805903523000,
+  "end_timestamp": 1805903643627,
+  "duration_ms": 120627,
+  "disconnection_reason": "user_hangup",
+  "retell_llm_dynamic_variables": {
+    "caller_ani": "+1 (415) 555-0116",
+    "matched_account_id": "AC-22087",
+    "matched_by": "caller_ani",
+    "account_holder_name": "R. Delacroix",
+    "account_zip": "00473",
+    "account_email": "r.delacroix@example.com",
+    "identity_verified": "false",
+    "booking_reference": "BK-6072-AD",
+    "event_title": "The Halloway Ensemble at Ridgeline Pavilion",
+    "event_id": "EV-44803",
+    "purchased_at": "2027-03-04T20:11:00Z",
+    "ticket_price_total": "78.00",
+    "currency": "USD",
+    "payment_instrument": "card ending 9053",
+    "charge_count": "1"
+  },
+  "collected_dynamic_variables": {
+    "identity_verified": "true"
+  },
+  "transcript_with_tool_calls": [
+    {
+      "role": "agent",
+      "content": "Verso Tickets, this is Marco. How can I help?",
+      "words": [
+        {
+          "word": "Verso",
+          "start": 7.618,
+          "end": 8.023
+        },
+        {
+          "word": "Tickets,",
+          "start": 8.023,
+          "end": 8.429
+        },
+        {
+          "word": "this",
+          "start": 8.429,
+          "end": 8.834
+        },
+        {
+          "word": "is",
+          "start": 8.834,
+          "end": 9.24
+        },
+        {
+          "word": "Marco.",
+          "start": 9.24,
+          "end": 9.645
+        },
+        {
+          "word": "How",
+          "start": 9.645,
+          "end": 10.051
+        },
+        {
+          "word": "can",
+          "start": 10.051,
+          "end": 10.456
+        },
+        {
+          "word": "I",
+          "start": 10.456,
+          "end": 10.862
+        },
+        {
+          "word": "help?",
+          "start": 10.862,
+          "end": 11.267
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "I've been charged twice for the same tickets, and my bank is telling me one of those charges was never authorized. I have been trying to sort this out for three weeks now and I am at the end of my rope with it.",
+      "words": [
+        {
+          "word": "I've",
+          "start": 12.027,
+          "end": 12.482
+        },
+        {
+          "word": "been",
+          "start": 12.482,
+          "end": 12.937
+        },
+        {
+          "word": "charged",
+          "start": 12.937,
+          "end": 13.392
+        },
+        {
+          "word": "twice",
+          "start": 13.392,
+          "end": 13.848
+        },
+        {
+          "word": "for",
+          "start": 13.848,
+          "end": 14.303
+        },
+        {
+          "word": "the",
+          "start": 14.303,
+          "end": 14.758
+        },
+        {
+          "word": "same",
+          "start": 14.758,
+          "end": 15.213
+        },
+        {
+          "word": "tickets,",
+          "start": 15.213,
+          "end": 15.668
+        },
+        {
+          "word": "and",
+          "start": 15.668,
+          "end": 16.123
+        },
+        {
+          "word": "my",
+          "start": 16.123,
+          "end": 16.579
+        },
+        {
+          "word": "bank",
+          "start": 16.579,
+          "end": 17.034
+        },
+        {
+          "word": "is",
+          "start": 17.034,
+          "end": 17.489
+        },
+        {
+          "word": "telling",
+          "start": 17.489,
+          "end": 17.944
+        },
+        {
+          "word": "me",
+          "start": 17.944,
+          "end": 18.399
+        },
+        {
+          "word": "one",
+          "start": 18.399,
+          "end": 18.854
+        },
+        {
+          "word": "of",
+          "start": 18.854,
+          "end": 19.31
+        },
+        {
+          "word": "those",
+          "start": 19.31,
+          "end": 19.765
+        },
+        {
+          "word": "charges",
+          "start": 19.765,
+          "end": 20.22
+        },
+        {
+          "word": "was",
+          "start": 20.22,
+          "end": 20.675
+        },
+        {
+          "word": "never",
+          "start": 20.675,
+          "end": 21.13
+        },
+        {
+          "word": "authorized.",
+          "start": 21.13,
+          "end": 21.585
+        },
+        {
+          "word": "I",
+          "start": 21.585,
+          "end": 22.04
+        },
+        {
+          "word": "have",
+          "start": 22.04,
+          "end": 22.496
+        },
+        {
+          "word": "been",
+          "start": 22.496,
+          "end": 22.951
+        },
+        {
+          "word": "trying",
+          "start": 22.951,
+          "end": 23.406
+        },
+        {
+          "word": "to",
+          "start": 23.406,
+          "end": 23.861
+        },
+        {
+          "word": "sort",
+          "start": 23.861,
+          "end": 24.316
+        },
+        {
+          "word": "this",
+          "start": 24.316,
+          "end": 24.771
+        },
+        {
+          "word": "out",
+          "start": 24.771,
+          "end": 25.227
+        },
+        {
+          "word": "for",
+          "start": 25.227,
+          "end": 25.682
+        },
+        {
+          "word": "three",
+          "start": 25.682,
+          "end": 26.137
+        },
+        {
+          "word": "weeks",
+          "start": 26.137,
+          "end": 26.592
+        },
+        {
+          "word": "now",
+          "start": 26.592,
+          "end": 27.047
+        },
+        {
+          "word": "and",
+          "start": 27.047,
+          "end": 27.502
+        },
+        {
+          "word": "I",
+          "start": 27.502,
+          "end": 27.958
+        },
+        {
+          "word": "am",
+          "start": 27.958,
+          "end": 28.413
+        },
+        {
+          "word": "at",
+          "start": 28.413,
+          "end": 28.868
+        },
+        {
+          "word": "the",
+          "start": 28.868,
+          "end": 29.323
+        },
+        {
+          "word": "end",
+          "start": 29.323,
+          "end": 29.778
+        },
+        {
+          "word": "of",
+          "start": 29.778,
+          "end": 30.233
+        },
+        {
+          "word": "my",
+          "start": 30.233,
+          "end": 30.689
+        },
+        {
+          "word": "rope",
+          "start": 30.689,
+          "end": 31.144
+        },
+        {
+          "word": "with",
+          "start": 31.144,
+          "end": 31.599
+        },
+        {
+          "word": "it.",
+          "start": 31.599,
+          "end": 32.054
+        }
+      ]
+    },
+    {
+      "role": "agent",
+      "content": "I can take a look. Can I get the ZIP code on the account?",
+      "words": [
+        {
+          "word": "I",
+          "start": 32.934,
+          "end": 33.352
+        },
+        {
+          "word": "can",
+          "start": 33.352,
+          "end": 33.77
+        },
+        {
+          "word": "take",
+          "start": 33.77,
+          "end": 34.188
+        },
+        {
+          "word": "a",
+          "start": 34.188,
+          "end": 34.606
+        },
+        {
+          "word": "look.",
+          "start": 34.606,
+          "end": 35.024
+        },
+        {
+          "word": "Can",
+          "start": 35.024,
+          "end": 35.442
+        },
+        {
+          "word": "I",
+          "start": 35.442,
+          "end": 35.86
+        },
+        {
+          "word": "get",
+          "start": 35.86,
+          "end": 36.277
+        },
+        {
+          "word": "the",
+          "start": 36.277,
+          "end": 36.695
+        },
+        {
+          "word": "ZIP",
+          "start": 36.695,
+          "end": 37.113
+        },
+        {
+          "word": "code",
+          "start": 37.113,
+          "end": 37.531
+        },
+        {
+          "word": "on",
+          "start": 37.531,
+          "end": 37.949
+        },
+        {
+          "word": "the",
+          "start": 37.949,
+          "end": 38.367
+        },
+        {
+          "word": "account?",
+          "start": 38.367,
+          "end": 38.785
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "00473. And I bought them in January, not March.",
+      "words": [
+        {
+          "word": "00473.",
+          "start": 39.505,
+          "end": 39.89
+        },
+        {
+          "word": "And",
+          "start": 39.89,
+          "end": 40.275
+        },
+        {
+          "word": "I",
+          "start": 40.275,
+          "end": 40.659
+        },
+        {
+          "word": "bought",
+          "start": 40.659,
+          "end": 41.044
+        },
+        {
+          "word": "them",
+          "start": 41.044,
+          "end": 41.429
+        },
+        {
+          "word": "in",
+          "start": 41.429,
+          "end": 41.814
+        },
+        {
+          "word": "January,",
+          "start": 41.814,
+          "end": 42.198
+        },
+        {
+          "word": "not",
+          "start": 42.198,
+          "end": 42.583
+        },
+        {
+          "word": "March.",
+          "start": 42.583,
+          "end": 42.968
+        }
+      ]
+    },
+    {
+      "role": "tool_call_invocation",
+      "tool_call_id": "t1",
+      "name": "verify_caller",
+      "arguments": "{\"account\": \"AC-22087\", \"zip\": \"00473\"}"
+    },
+    {
+      "role": "tool_call_result",
+      "tool_call_id": "t1",
+      "content": "{\"status\": \"ok\", \"detail\": \"match=true\"}",
+      "successful": true
+    },
+    {
+      "role": "agent",
+      "content": "Thank you. I have the purchase down as March fourth.",
+      "words": [
+        {
+          "word": "Thank",
+          "start": 45.058,
+          "end": 45.451
+        },
+        {
+          "word": "you.",
+          "start": 45.451,
+          "end": 45.844
+        },
+        {
+          "word": "I",
+          "start": 45.844,
+          "end": 46.237
+        },
+        {
+          "word": "have",
+          "start": 46.237,
+          "end": 46.63
+        },
+        {
+          "word": "the",
+          "start": 46.63,
+          "end": 47.024
+        },
+        {
+          "word": "purchase",
+          "start": 47.024,
+          "end": 47.417
+        },
+        {
+          "word": "down",
+          "start": 47.417,
+          "end": 47.81
+        },
+        {
+          "word": "as",
+          "start": 47.81,
+          "end": 48.203
+        },
+        {
+          "word": "March",
+          "start": 48.203,
+          "end": 48.596
+        },
+        {
+          "word": "fourth.",
+          "start": 48.596,
+          "end": 48.989
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "That's not right. I bought them in January — I still have the email.",
+      "words": [
+        {
+          "word": "That's",
+          "start": 49.809,
+          "end": 50.235
+        },
+        {
+          "word": "not",
+          "start": 50.235,
+          "end": 50.661
+        },
+        {
+          "word": "right.",
+          "start": 50.661,
+          "end": 51.087
+        },
+        {
+          "word": "I",
+          "start": 51.087,
+          "end": 51.514
+        },
+        {
+          "word": "bought",
+          "start": 51.514,
+          "end": 51.94
+        },
+        {
+          "word": "them",
+          "start": 51.94,
+          "end": 52.366
+        },
+        {
+          "word": "in",
+          "start": 52.366,
+          "end": 52.792
+        },
+        {
+          "word": "January",
+          "start": 52.792,
+          "end": 53.218
+        },
+        {
+          "word": "—",
+          "start": 53.218,
+          "end": 53.644
+        },
+        {
+          "word": "I",
+          "start": 53.644,
+          "end": 54.07
+        },
+        {
+          "word": "still",
+          "start": 54.07,
+          "end": 54.497
+        },
+        {
+          "word": "have",
+          "start": 54.497,
+          "end": 54.923
+        },
+        {
+          "word": "the",
+          "start": 54.923,
+          "end": 55.349
+        },
+        {
+          "word": "email.",
+          "start": 55.349,
+          "end": 55.775
+        }
+      ]
+    },
+    {
+      "role": "agent",
+      "content": "That will be the date the booking was confirmed on our side. January would have been when you were browsing.",
+      "words": [
+        {
+          "word": "That",
+          "start": 56.505,
+          "end": 56.91
+        },
+        {
+          "word": "will",
+          "start": 56.91,
+          "end": 57.316
+        },
+        {
+          "word": "be",
+          "start": 57.316,
+          "end": 57.722
+        },
+        {
+          "word": "the",
+          "start": 57.722,
+          "end": 58.127
+        },
+        {
+          "word": "date",
+          "start": 58.127,
+          "end": 58.532
+        },
+        {
+          "word": "the",
+          "start": 58.532,
+          "end": 58.938
+        },
+        {
+          "word": "booking",
+          "start": 58.938,
+          "end": 59.344
+        },
+        {
+          "word": "was",
+          "start": 59.344,
+          "end": 59.749
+        },
+        {
+          "word": "confirmed",
+          "start": 59.749,
+          "end": 60.154
+        },
+        {
+          "word": "on",
+          "start": 60.154,
+          "end": 60.56
+        },
+        {
+          "word": "our",
+          "start": 60.56,
+          "end": 60.966
+        },
+        {
+          "word": "side.",
+          "start": 60.966,
+          "end": 61.371
+        },
+        {
+          "word": "January",
+          "start": 61.371,
+          "end": 61.776
+        },
+        {
+          "word": "would",
+          "start": 61.776,
+          "end": 62.182
+        },
+        {
+          "word": "have",
+          "start": 62.182,
+          "end": 62.588
+        },
+        {
+          "word": "been",
+          "start": 62.588,
+          "end": 62.993
+        },
+        {
+          "word": "when",
+          "start": 62.993,
+          "end": 63.398
+        },
+        {
+          "word": "you",
+          "start": 63.398,
+          "end": 63.804
+        },
+        {
+          "word": "were",
+          "start": 63.804,
+          "end": 64.21
+        },
+        {
+          "word": "browsing.",
+          "start": 64.21,
+          "end": 64.615
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "And the bank? Northfield told me the second charge was never authorized.",
+      "words": [
+        {
+          "word": "And",
+          "start": 65.375,
+          "end": 65.756
+        },
+        {
+          "word": "the",
+          "start": 65.756,
+          "end": 66.136
+        },
+        {
+          "word": "bank?",
+          "start": 66.136,
+          "end": 66.517
+        },
+        {
+          "word": "Northfield",
+          "start": 66.517,
+          "end": 66.898
+        },
+        {
+          "word": "told",
+          "start": 66.898,
+          "end": 67.278
+        },
+        {
+          "word": "me",
+          "start": 67.278,
+          "end": 67.659
+        },
+        {
+          "word": "the",
+          "start": 67.659,
+          "end": 68.04
+        },
+        {
+          "word": "second",
+          "start": 68.04,
+          "end": 68.42
+        },
+        {
+          "word": "charge",
+          "start": 68.42,
+          "end": 68.801
+        },
+        {
+          "word": "was",
+          "start": 68.801,
+          "end": 69.182
+        },
+        {
+          "word": "never",
+          "start": 69.182,
+          "end": 69.562
+        },
+        {
+          "word": "authorized.",
+          "start": 69.562,
+          "end": 69.943
+        }
+      ]
+    },
+    {
+      "role": "agent",
+      "content": "There's only one charge against this booking, so whatever Northfield are seeing isn't coming from us.",
+      "words": [
+        {
+          "word": "There's",
+          "start": 70.633,
+          "end": 71.022
+        },
+        {
+          "word": "only",
+          "start": 71.022,
+          "end": 71.411
+        },
+        {
+          "word": "one",
+          "start": 71.411,
+          "end": 71.8
+        },
+        {
+          "word": "charge",
+          "start": 71.8,
+          "end": 72.189
+        },
+        {
+          "word": "against",
+          "start": 72.189,
+          "end": 72.578
+        },
+        {
+          "word": "this",
+          "start": 72.578,
+          "end": 72.967
+        },
+        {
+          "word": "booking,",
+          "start": 72.967,
+          "end": 73.356
+        },
+        {
+          "word": "so",
+          "start": 73.356,
+          "end": 73.744
+        },
+        {
+          "word": "whatever",
+          "start": 73.744,
+          "end": 74.133
+        },
+        {
+          "word": "Northfield",
+          "start": 74.133,
+          "end": 74.522
+        },
+        {
+          "word": "are",
+          "start": 74.522,
+          "end": 74.911
+        },
+        {
+          "word": "seeing",
+          "start": 74.911,
+          "end": 75.3
+        },
+        {
+          "word": "isn't",
+          "start": 75.3,
+          "end": 75.689
+        },
+        {
+          "word": "coming",
+          "start": 75.689,
+          "end": 76.078
+        },
+        {
+          "word": "from",
+          "start": 76.078,
+          "end": 76.467
+        },
+        {
+          "word": "us.",
+          "start": 76.467,
+          "end": 76.856
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "So they're wrong and you're right.",
+      "words": [
+        {
+          "word": "So",
+          "start": 77.586,
+          "end": 78.0
+        },
+        {
+          "word": "they're",
+          "start": 78.0,
+          "end": 78.413
+        },
+        {
+          "word": "wrong",
+          "start": 78.413,
+          "end": 78.827
+        },
+        {
+          "word": "and",
+          "start": 78.827,
+          "end": 79.241
+        },
+        {
+          "word": "you're",
+          "start": 79.241,
+          "end": 79.654
+        },
+        {
+          "word": "right.",
+          "start": 79.654,
+          "end": 80.068
+        }
+      ]
+    },
+    {
+      "role": "agent",
+      "content": "The record here shows one payment, yes.",
+      "words": [
+        {
+          "word": "The",
+          "start": 80.708,
+          "end": 81.105
+        },
+        {
+          "word": "record",
+          "start": 81.105,
+          "end": 81.502
+        },
+        {
+          "word": "here",
+          "start": 81.502,
+          "end": 81.899
+        },
+        {
+          "word": "shows",
+          "start": 81.899,
+          "end": 82.297
+        },
+        {
+          "word": "one",
+          "start": 82.297,
+          "end": 82.694
+        },
+        {
+          "word": "payment,",
+          "start": 82.694,
+          "end": 83.091
+        },
+        {
+          "word": "yes.",
+          "start": 83.091,
+          "end": 83.488
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "This is exactly what happened last time. Nobody will just look at it properly.",
+      "words": [
+        {
+          "word": "This",
+          "start": 84.308,
+          "end": 84.759
+        },
+        {
+          "word": "is",
+          "start": 84.759,
+          "end": 85.21
+        },
+        {
+          "word": "exactly",
+          "start": 85.21,
+          "end": 85.661
+        },
+        {
+          "word": "what",
+          "start": 85.661,
+          "end": 86.112
+        },
+        {
+          "word": "happened",
+          "start": 86.112,
+          "end": 86.563
+        },
+        {
+          "word": "last",
+          "start": 86.563,
+          "end": 87.014
+        },
+        {
+          "word": "time.",
+          "start": 87.014,
+          "end": 87.465
+        },
+        {
+          "word": "Nobody",
+          "start": 87.465,
+          "end": 87.916
+        },
+        {
+          "word": "will",
+          "start": 87.916,
+          "end": 88.367
+        },
+        {
+          "word": "just",
+          "start": 88.367,
+          "end": 88.818
+        },
+        {
+          "word": "look",
+          "start": 88.818,
+          "end": 89.269
+        },
+        {
+          "word": "at",
+          "start": 89.269,
+          "end": 89.72
+        },
+        {
+          "word": "it",
+          "start": 89.72,
+          "end": 90.171
+        },
+        {
+          "word": "properly.",
+          "start": 90.171,
+          "end": 90.622
+        }
+      ]
+    },
+    {
+      "role": "agent",
+      "content": "Is there anything else I can help you with today?",
+      "words": [
+        {
+          "word": "Is",
+          "start": 91.382,
+          "end": 91.8
+        },
+        {
+          "word": "there",
+          "start": 91.8,
+          "end": 92.218
+        },
+        {
+          "word": "anything",
+          "start": 92.218,
+          "end": 92.636
+        },
+        {
+          "word": "else",
+          "start": 92.636,
+          "end": 93.054
+        },
+        {
+          "word": "I",
+          "start": 93.054,
+          "end": 93.472
+        },
+        {
+          "word": "can",
+          "start": 93.472,
+          "end": 93.889
+        },
+        {
+          "word": "help",
+          "start": 93.889,
+          "end": 94.307
+        },
+        {
+          "word": "you",
+          "start": 94.307,
+          "end": 94.725
+        },
+        {
+          "word": "with",
+          "start": 94.725,
+          "end": 95.143
+        },
+        {
+          "word": "today?",
+          "start": 95.143,
+          "end": 95.561
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "No. Clearly not.",
+      "words": [
+        {
+          "word": "No.",
+          "start": 96.431,
+          "end": 96.853
+        },
+        {
+          "word": "Clearly",
+          "start": 96.853,
+          "end": 97.275
+        },
+        {
+          "word": "not.",
+          "start": 97.275,
+          "end": 97.697
+        }
+      ]
+    }
+  ],
+  "call_analysis": {
+    "call_successful": false,
+    "custom_analysis_data": {
+      "outcome": "unresolved",
+      "outcome_reason": "unresolved"
+    }
+  }
+}

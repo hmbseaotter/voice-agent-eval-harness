@@ -1,0 +1,96 @@
+# A small findings document for schema tests.
+#
+# F-90's evidence holds three fragments that are deliberately similar and
+# deliberately multi-line. A round-trip that joined them, split them wrongly, or
+# collapsed the newlines would still produce plausible-looking text -- which is
+# exactly why the assertion is on all three staying distinct rather than on the
+# characters surviving.
+
+findings:
+  - id: F-90
+    call_ref: CALL-90
+    owner: agent
+    observation: >-
+      Three fragments from three different points in the call, kept separate.
+    evidence:
+      - |-
+        event 4 — "I'll get that sorted for you."
+        (spoken before any tool ran)
+      - |-
+        event 9 — "I'll get that sorted for you."
+        (spoken again, after the tool refused)
+      - |-
+        event 14 — "That's all sorted for you."
+        (spoken a third time, still with nothing done)
+    consequence: >-
+      Fragments from different points in a call have to stay visibly separate,
+      because the repetition is the finding.
+    detectable_by: assert
+    tier: defect
+
+  - id: F-91
+    call_ref: CALL-90
+    owner: data
+    observation: >-
+      A total with no fee component, internally consistent, which cannot be
+      resolved from the transcript.
+    evidence:
+      - 'event 11 — ticket_price_total := 40.00, with no booking_fee set'
+    consequence: >-
+      Either a deliberate product decision or a missing implementation. A
+      question for whoever owns the schema, not a defect charged to the call.
+    detectable_by: human
+    tier: question
+
+  - id: F-92
+    call_ref: CALL-91
+    owner: platform
+    observation: >-
+      A finding nobody compared during scoring, so it carries no severity band.
+    evidence:
+      - 'event 3 — "the usual arrangement applies"'
+    consequence: >-
+      Unplaced findings get no band rather than a defaulted one; banding them
+      would report the prior as though it were a judgment.
+    detectable_by: judge
+    tier: defect
+
+  # F-93 to F-95 exist so the severity fixture can draw all three band cuts, as
+  # the scoring tool does: three cuts need four scored findings in descending
+  # severity, and a fixture scoring fewer can only state cuts the tool never
+  # draws, which the loader refuses (D171).
+  - id: F-93
+    call_ref: CALL-90
+    owner: agent
+    observation: >-
+      A defect banded high, between the critical finding and the medium one.
+    evidence:
+      - 'event 6 — "your seats are confirmed"'
+    consequence: >-
+      Anchors the first cut from below and the second from above.
+    detectable_by: assert
+    tier: defect
+
+  - id: F-94
+    call_ref: CALL-90
+    owner: data
+    observation: >-
+      A defect banded medium, between the high finding and the low one.
+    evidence:
+      - 'event 7 — ticket_count := 2, with three names on the booking'
+    consequence: >-
+      Anchors the second cut from below and the third from above.
+    detectable_by: assert
+    tier: defect
+
+  - id: F-95
+    call_ref: CALL-90
+    owner: platform
+    observation: >-
+      A defect banded low, below every other scored finding.
+    evidence:
+      - 'event 8 — "the confirmation email will follow shortly"'
+    consequence: >-
+      Anchors the third cut from below.
+    detectable_by: judge
+    tier: defect

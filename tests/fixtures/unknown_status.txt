@@ -1,0 +1,27 @@
+#format: voice-agent-eval-harness/transcript v2
+
+[call]
+call_id: CALL-91
+agent_id: fixture
+agent_version: 1
+environment: test
+direction: inbound
+from_number: +1 (415) 555-0191
+to_number: +1 (415) 555-0100
+started_at: 2027-01-01T00:00:00.000Z
+answered_at: 2027-01-01T00:00:01.000Z
+ended_at: 2027-01-01T00:00:12.000Z
+duration_ms: 12000
+disconnection_reason: caller_hangup
+outcome: resolved
+outcome_reason: fixture
+
+[context]
+# none
+
+[events]
+  1 |  0:01.000 |  0:01.200 | TOOL_CALL   | t1 lookup_booking(reference="BK-0000-AA")
+  2 |  0:01.200 |  0:02.000 | TOOL_RESULT | t1 -> retrieved successful=true :: fine
+  3 |  0:03.000 |  0:03.200 | TOOL_CALL   | t2 issue_refund(booking="BK-0000-AA")
+  4 |  0:03.200 |  0:05.000 | TOOL_RESULT | t2 -> sortof successful=false :: not a real status
+  5 |  0:06.000 |  0:12.000 | CALLER      | Single line.

@@ -1,0 +1,8 @@
+# Synthetic transcripts used only by tests. Declared rather than excluded:
+# excluding a directory from the held-out scan would create a hiding place,
+# and a hiding place is what the scan exists to deny.
+CALL-90
+CALL-91
+CALL-92
+CALL-93
+CALL-94

@@ -1,0 +1,492 @@
+"""The report a human reads, for the two audiences the specification names.
+
+**Two audiences, routed by `owner`.** D43 made `owner` a required field on every
+finding precisely so this split would be a property of the finding rather than a
+guess made at render time -- *"different fix, different desk, different section
+of the report"*. An entry belongs to the agent-behavior audience when a finding
+it traces is owned by the agent, and to the data-and-integration audience when
+one is owned by the platform or the data. **An entry can be in both**, and two
+in the shipped rubric are: a write that executed against an unset gate is an
+agent defect and a platform defect at once, and putting it in one section would
+hand half of it to the wrong desk.
+
+**Orthogonal labels, because one value cannot express a call that failed in
+several independent ways.** That is taxonomy item 34, and its disposition is
+explicit that the recommendation applies to *this report* and not only to a
+system under test. So a call's row carries three independent axes -- what was
+found, what could not be evaluated, and which owners must act -- and never one
+collapsed verdict. CALL-01 and CALL-02 are where the single-valued label is
+seeded in the corpus, and they are the rows to look at.
+
+**The non-determinism caveat is inline.** A judged verdict is a sample, not a
+proof (D17), and a reader meets that fact in the same section as the numbers it
+qualifies rather than in a footer. A caveat a reader reaches after the number it
+qualifies has already failed.
+
+**Model-authored text is escaped, not stripped.** The requirement's verb is
+*escape*, and the difference matters: a renderer that deleted every pipe and
+newline would keep the table intact and destroy the rationale a reader is being
+shown. `escape_cell` is reversible by `unescape_cell`, and the round trip is
+asserted -- which is what makes "escaped" a claim rather than a description.
+
+**Determinism is structural.** Every ordering here is explicit and every number
+is computed from the results; nothing iterates a set or a dictionary in insertion
+order. The Tier A section is rendered by its own function so it can be asserted
+byte-identical in both modes, which the full report cannot be: under live the
+judged half is a sample by design (D8).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Final
+
+from harness.core.engine import EntryRollup, RunReport
+from harness.core.findings import Finding
+from harness.core.result import Provenance, Result, Status
+from harness.core.rubric import Rubric, RubricEntry
+from harness.judge.engine import JudgedOutcome
+from harness.judge.rollup import JudgedEntryRollup, outcome_text
+
+#: The owners routed to each audience. Written as data rather than as an `if`,
+#: because the split is the specification's and a reader of this module should
+#: be able to see it without following a branch.
+AUDIENCES: Final[tuple[tuple[str, str, frozenset[str]], ...]] = (
+    (
+        "Agent behavior",
+        "Findings a change to the agent would fix: what it said, what it asked for, what it "
+        "concluded.",
+        frozenset({"agent"}),
+    ),
+    (
+        "Data and integration",
+        "Findings no change to the agent would fix: a record that contradicts itself, a "
+        "capability that was configured and not delivered, a write that executed against an "
+        "unset gate.",
+        frozenset({"platform", "data"}),
+    ),
+)
+
+#: What a judged number is, said where the judged numbers are.
+NON_DETERMINISM_CAVEAT: Final[str] = (
+    "**Every number in this section is a sample.** A judged verdict comes from a model, and "
+    "the same rubric run again may return a different one -- which is what the repetition "
+    "count is for, and why each call below carries its distribution rather than a verdict. "
+    "N repetitions measure **evaluator** variance over a fixed transcript: there is no agent "
+    "under test here, so none of this is a production failure rate. A rate is computed over "
+    "the calls that produced a verdict, and every other status is counted beside it rather "
+    "than folded into it."
+)
+
+#: Statuses that mean a result could not be obtained, as opposed to a question
+#: that does not arise for this call. `not_applicable` is deliberately absent:
+#: the builder's own words for it are "the check's precondition did not occur in
+#: this call -- nothing is missing, there is simply nothing to judge".
+_COULD_NOT_OBTAIN: Final[frozenset[Status]] = frozenset(
+    {Status.UNEVALUABLE, Status.ERRORED, Status.REFUSED}
+)
+
+_ESCAPES: Final[tuple[tuple[str, str], ...]] = (
+    # Backslash first, and it has to be: escaping it after the others would
+    # escape the backslashes they just introduced, and the round trip would
+    # return something longer than it started.
+    ("\\", "\\\\"),
+    ("|", "\\|"),
+    ("\r\n", "\\n"),
+    ("\n", "\\n"),
+    ("\r", "\\r"),
+)
+
+
+def escape_cell(text: str) -> str:
+    """Model-authored text, safe in a table cell and still recoverable.
+
+    **Escaped rather than stripped.** A renderer that deleted every pipe and
+    newline would satisfy "renders without corrupting the report table" and
+    destroy the rationale a reader is being shown -- which is why D130 added a
+    criterion for the half the original could not buy.
+
+    Backslash escapes rather than HTML: `<br>` renders more prettily and is not
+    reversible, because a rationale containing the literal text `<br>` would be
+    indistinguishable from a line break. This scheme is injective, and
+    `unescape_cell` is its inverse.
+    """
+    for raw, escaped in _ESCAPES:
+        text = text.replace(raw, escaped)
+    return text
+
+
+def unescape_cell(text: str) -> str:
+    """The inverse of `escape_cell`, so the round trip is assertable.
+
+    Exists to be tested rather than to be used by the renderer. A reversible
+    encoding nobody reverses is a claim about the encoding that nothing checks,
+    and "the model's text is recoverable from the rendered cell" is a criterion.
+    """
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char != "\\" or index + 1 >= len(text):
+            out.append(char)
+            index += 1
+            continue
+        following = text[index + 1]
+        out.append({"n": "\n", "r": "\r", "|": "|", "\\": "\\"}.get(following, following))
+        index += 2
+    return "".join(out)
+
+
+@dataclass(frozen=True, slots=True)
+class CallLabels:
+    """One call on three independent axes (taxonomy 34).
+
+    Never collapsed into one value, and the three are genuinely independent: a
+    call can have defects found *and* dimensions that could not be evaluated
+    *and* owners on two desks, and any single label would have to pick one.
+    """
+
+    call_id: str
+    found: tuple[str, ...]
+    """What was found, by tier. Empty means nothing fired."""
+
+    not_evaluated: tuple[str, ...]
+    """Entries that produced no verdict, with the reason. Not a failure and not
+    a pass -- a dimension that did not apply and one that errored are both
+    here, distinguished by their status."""
+
+    owners: tuple[str, ...]
+    """Which desks a fix would go to, from the `owner` of the findings the
+    firing entries trace."""
+
+
+def _entry_owners(entry: RubricEntry, findings: Mapping[str, Finding]) -> frozenset[str]:
+    return frozenset(findings[finding].owner for finding in entry.traces_to if finding in findings)
+
+
+def audience_entries(
+    rubric: Rubric, findings: Mapping[str, Finding], owners: frozenset[str]
+) -> tuple[RubricEntry, ...]:
+    """Entries whose traced findings put them in front of this audience.
+
+    Membership rather than majority: an entry tracing an agent finding and a
+    platform finding is in both sections, because it names two defects and one
+    of them belongs to each desk.
+    """
+    return tuple(entry for entry in rubric.entries if _entry_owners(entry, findings) & owners)
+
+
+def call_labels(
+    report: RunReport,
+    judged: Sequence[JudgedOutcome],
+    rollups: Sequence[JudgedEntryRollup],
+    rubric: Rubric,
+    findings: Mapping[str, Finding],
+) -> tuple[CallLabels, ...]:
+    """Three orthogonal labels per call, in call order.
+
+    **A judged entry is found on a call by its modal verdict**, tie rule
+    included -- the verdict the gate and both judged tables read (D158). It was
+    found when any repetition returned the negative pole until the audit of
+    2026-09-12, so the snapshot listed an entry under "what was found" on a call
+    whose own distribution row gave the opposite verdict (P4-8).
+    """
+    negatives = {entry.id: entry.negative for entry in rubric.entries}
+    judged_found = {
+        (rollup.entry.id, call.call_id)
+        for rollup in rollups
+        for call in rollup.calls
+        if call.violated
+    }
+    call_ids = sorted(
+        {result.call_id for result in report.results}
+        | {outcome.result.call_id for outcome in judged}
+    )
+    labels: list[CallLabels] = []
+    for call_id in call_ids:
+        deterministic = [r for r in report.results if r.call_id == call_id]
+        judged_here = [o.result for o in judged if o.result.call_id == call_id]
+
+        found = sorted(
+            {
+                result.entry_id
+                for result in deterministic
+                if result.verdict == negatives.get(result.entry_id)
+            }
+            | {entry_id for entry_id, found_on in judged_found if found_on == call_id}
+        )
+        # **What a reader cannot learn about this call**, which is narrower than
+        # every result that produced no verdict.
+        #
+        # A deterministic check whose precondition did not occur says nothing:
+        # most checks do not apply to most calls, and listing them would put
+        # twenty-odd entries in a cell and bury the two that matter. So
+        # `not_applicable` counts **only for a judged dimension**, where it is
+        # news -- there are seven of them, each is a question somebody wanted
+        # answered, and one excluded by its precondition means this report
+        # cannot tell you about that here.
+        #
+        # `unevaluable`, `errored` and `refused` count from either tier, because
+        # each of those is a result that could not be obtained rather than a
+        # question that does not arise.
+        not_evaluated = sorted(
+            {
+                f"{result.entry_id} ({result.status.value})"
+                for result in [*deterministic, *judged_here]
+                if result.status in _COULD_NOT_OBTAIN
+            }
+            | {
+                f"{result.entry_id} ({result.status.value})"
+                for result in judged_here
+                if result.status is Status.NOT_APPLICABLE
+            }
+        )
+        owners: set[str] = set()
+        for entry_id in found:
+            entry = rubric.by_id(entry_id)
+            owners |= _entry_owners(entry, findings)
+        labels.append(
+            CallLabels(
+                call_id=call_id,
+                found=tuple(found),
+                not_evaluated=tuple(not_evaluated),
+                owners=tuple(sorted(owners)),
+            )
+        )
+    return tuple(labels)
+
+
+def _deterministic_table(rollups: Sequence[EntryRollup], report: RunReport) -> list[str]:
+    lines = [
+        "| entry | gate | rate | applicable | n/a | unevaluable | errored | refused | fired on |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for rollup in rollups:
+        rate = "--" if rollup.pass_rate is None else f"{rollup.pass_rate:.2f}"
+        fired = sorted(
+            {
+                result.call_id
+                for result in report.for_entry(rollup.entry.id)
+                if result.verdict == rollup.entry.negative
+            }
+        )
+        lines.append(
+            f"| `{rollup.entry.id}` | {rollup.entry.gate.value} | {rate} | {rollup.applicable} "
+            f"| {rollup.not_applicable} | {rollup.unevaluable} | {rollup.errored} "
+            f"| {rollup.refused} | {', '.join(fired) or '--'} |"
+        )
+    return lines
+
+
+def _judged_table(rollups: Sequence[JudgedEntryRollup]) -> list[str]:
+    lines = [
+        "| entry | model | gate | rate | applicable (calls) | n/a (results) "
+        "| unevaluable (results) | errored (results) | refused (results) |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for rollup in rollups:
+        spec = rollup.entry.judge
+        model = spec.model if spec is not None else "--"
+        rate = "--" if rollup.pass_rate is None else f"{rollup.pass_rate:.2f}"
+        lines.append(
+            f"| `{rollup.entry.id}` | {model} | {rollup.entry.gate.value} | {rate} "
+            f"| {rollup.applicable} | {rollup.result_count(Status.NOT_APPLICABLE)} "
+            f"| {rollup.result_count(Status.UNEVALUABLE)} "
+            f"| {rollup.result_count(Status.ERRORED)} "
+            f"| {rollup.result_count(Status.REFUSED)} |"
+        )
+    return lines
+
+
+def _judged_distributions(rollups: Sequence[JudgedEntryRollup]) -> list[str]:
+    lines = ["| entry | call | verdict | distribution across repetitions |", "|---|---|---|---|"]
+    for rollup in rollups:
+        for call in rollup.calls:
+            lines.append(
+                f"| `{rollup.entry.id}` | {call.call_id} | {call.verdict or '--'} "
+                f"| {escape_cell(outcome_text(call))} |"
+            )
+    return lines
+
+
+def render_tier_a(rollups: Sequence[EntryRollup], report: RunReport) -> str:
+    """The deterministic section, rendered on its own.
+
+    Separate from the full report because the two carry different
+    reproducibility claims (D8): this is byte-identical in **both** modes,
+    since it makes no model call, and the full report only under replay. A
+    snapshot that conflated them would be regenerated the first time somebody
+    ran live, and the regression signal would go with it.
+    """
+    lines = [
+        "## Deterministic tier",
+        "",
+        "Every parameter read from the rubric entry; no model call is made. These numbers are "
+        "byte-identical across runs and across modes, which is the claim replay mode exists to "
+        "make checkable.",
+        "",
+        *_deterministic_table(rollups, report),
+    ]
+    return "\n".join(lines)
+
+
+def render_judged(rollups: Sequence[JudgedEntryRollup]) -> str:
+    """The judged section, with its caveat above its numbers."""
+    # **The caveat's position is a value, not a place in a list.** A caveat a
+    # reader meets after the number it qualifies has already failed, and the
+    # difference between inline and footer is one line here rather than a
+    # rearrangement -- which is what lets a control move it.
+    caveat_first = True
+    lines = [
+        "## Judged tier",
+        "",
+        *([NON_DETERMINISM_CAVEAT, ""] if caveat_first else []),
+        *_judged_table(rollups),
+        *([] if caveat_first else ["", NON_DETERMINISM_CAVEAT]),
+        "",
+        "### Verdict distributions",
+        "",
+        *_judged_distributions(rollups),
+    ]
+    defects = [
+        (rollup.entry.id, call_id, identifier)
+        for rollup in rollups
+        for call_id, identifier in rollup.unresolved_dimensions
+    ]
+    if defects:
+        lines += [
+            "",
+            "### Synthesis citation defects",
+            "",
+            "A synthesis that rests on a dimension which produced no result for that call has "
+            "reasoned from something that does not exist. Reported rather than retried: a "
+            "fabricated transcript citation can be corrected by showing the model the valid "
+            "set, and this cannot.",
+            "",
+            "| entry | call | identifier |",
+            "|---|---|---|",
+            *(
+                f"| `{entry_id}` | {call_id} | `{escape_cell(identifier)}` |"
+                for entry_id, call_id, identifier in defects
+            ),
+        ]
+    return "\n".join(lines)
+
+
+def render_audience(
+    title: str,
+    blurb: str,
+    entries: Sequence[RubricEntry],
+    deterministic: Sequence[EntryRollup],
+    judged: Sequence[JudgedEntryRollup],
+    report: RunReport,
+) -> str:
+    """One audience's section, holding only the entries routed to it."""
+    ids = {entry.id for entry in entries}
+    mine_det = [rollup for rollup in deterministic if rollup.entry.id in ids]
+    mine_judged = [rollup for rollup in judged if rollup.entry.id in ids]
+    lines = [f"## {title}", "", blurb, ""]
+    if mine_det:
+        lines += ["### Deterministic", "", *_deterministic_table(mine_det, report), ""]
+    if mine_judged:
+        lines += ["### Judged", "", *_judged_table(mine_judged), ""]
+    if not mine_det and not mine_judged:
+        lines += ["No rubric entry traces a finding owned by this audience.", ""]
+    return "\n".join(lines).rstrip()
+
+
+def render_calls(labels: Sequence[CallLabels]) -> str:
+    """The orthogonal-label table (taxonomy 34)."""
+    lines = [
+        "## Calls",
+        "",
+        "Three independent axes, never one collapsed value. A call can have defects found, "
+        "dimensions that could not be evaluated, and owners on two desks at once -- and a "
+        "single outcome label would have to pick one of the three. The corpus seeds that "
+        "failure in CALL-01 and CALL-02, and this table is the recommendation applied to this "
+        "report rather than only to a system under test.",
+        "",
+        "| call | what was found | what was not evaluated | owners to act |",
+        "|---|---|---|---|",
+    ]
+    for label in labels:
+        lines.append(
+            f"| {label.call_id} | {', '.join(label.found) or 'nothing'} "
+            f"| {', '.join(label.not_evaluated) or 'everything applied'} "
+            f"| {', '.join(label.owners) or '--'} |"
+        )
+    return "\n".join(lines)
+
+
+def render_report(
+    *,
+    provenance: Provenance,
+    template_hash: str,
+    mode: str,
+    rubric: Rubric,
+    findings: Mapping[str, Finding],
+    report: RunReport,
+    deterministic: Sequence[EntryRollup],
+    judged_outcomes: Sequence[JudgedOutcome],
+    judged: Sequence[JudgedEntryRollup],
+) -> str:
+    """The whole report, in a fixed order, from values only.
+
+    Takes no clock and no path: everything here is derived from the run's own
+    results and the artifacts it names, which is what lets the same inputs
+    produce the same bytes. A timestamp would make every snapshot fail for a
+    reason that is not a regression.
+    """
+    sections = [
+        "# Evaluation report",
+        "",
+        f"rubric `{provenance.rubric_version}` | corpus `{provenance.corpus_version}` | "
+        f"extraction artifact `{provenance.artifact_hash[:16]}` | prompt template "
+        f"`{template_hash[:16]}` | mode `{mode}`",
+        "",
+        "Every result carries those four, so any row here can be recomputed from the inputs it "
+        "names. Walk a finding backwards: report row to rubric entry to `traces_to` to a "
+        "findings row to a transcript line.",
+        "",
+        render_calls(call_labels(report, judged_outcomes, judged, rubric, findings)),
+        "",
+        render_tier_a(deterministic, report),
+        "",
+        render_judged(judged),
+        "",
+    ]
+    for title, blurb, owners in AUDIENCES:
+        sections.append(
+            render_audience(
+                title,
+                blurb,
+                audience_entries(rubric, findings, owners),
+                deterministic,
+                judged,
+                report,
+            )
+        )
+        sections.append("")
+    return "\n".join(sections).rstrip() + "\n"
+
+
+def firing_calls(report: RunReport, entry: RubricEntry) -> tuple[str, ...]:
+    """Calls where this entry returned its declared negative pole."""
+    return tuple(
+        sorted(
+            {
+                result.call_id
+                for result in report.for_entry(entry.id)
+                if result.verdict == entry.negative
+            }
+        )
+    )
+
+
+def results_by_owner(
+    report: RunReport, rubric: Rubric, findings: Mapping[str, Finding], owners: frozenset[str]
+) -> tuple[Result, ...]:
+    """Deterministic results whose entry is routed to this audience."""
+    ids = {entry.id for entry in audience_entries(rubric, findings, owners)}
+    return tuple(result for result in report.results if result.entry_id in ids)

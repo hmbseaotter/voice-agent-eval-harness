@@ -1,0 +1,92 @@
+[project]
+name = "voice-agent-eval-harness"
+version = "0.1.0"
+description = "An LLM-as-a-judge evaluation harness for agentic voice-support calls."
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Saso Gale" }]
+
+# Exact pins, not floors. W35 in the known-weakness list is precisely this
+# defect: a dependency file that stated floors and called them pins, in a
+# project whose thesis is reproducibility. `uv.lock` would pin these anyway --
+# stating `==` here means the DECLARATION is not a floor either, so the two
+# files cannot drift into disagreeing about what "pinned" means.
+#
+# Three runtime dependencies. PyYAML reads the rubric and the findings. tzdata
+# joined at P2: `zoneinfo` reads the operating system's copy of the IANA
+# database, Windows ships none, and the venue-local date check would
+# therefore have passed on the CI runner and failed on the author's machine.
+# A platform-dependent test is worse than either outcome alone, so the
+# database is pinned like everything else rather than inherited from the
+# host.
+#
+# The Anthropic SDK joined at P3 with the model transport seam (D122). It is
+# imported by the LIVE transport only: `harness.core.transport` defers the
+# import into `LiveTransport.__init__`, so a replay run -- the default mode --
+# neither imports it nor needs a credential. That is D8's key-free running
+# expressed as an import boundary rather than as a promise, and
+# `test_the_replay_path_does_not_import_the_sdk` asserts it.
+dependencies = [
+    "PyYAML==6.0.3",
+    "anthropic==1.4.0",
+    "tzdata==2026.1",
+]
+
+# The deterministic tier is runnable as a command from P2. `harness run
+# --tier assert` is an acceptance criterion, and a criterion naming a
+# command needs the command to exist.
+[project.scripts]
+harness = "harness.cli:main"
+
+[dependency-groups]
+# types-PyYAML is a stubs-only package for an already-approved dependency.
+# It is here because "mypy --strict with no ignored errors" is an acceptance
+# criterion and PyYAML ships no inline types: without the stubs the only way
+# to a green type check is a `# type: ignore`, which is the thing the
+# criterion forbids.
+dev = ["pytest==9.1.1", "mypy==2.3.1", "ruff==0.16.5", "types-PyYAML==6.0.12.20260815"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness"]
+# PEP 561. Without it an installed `harness` is untyped to its consumers, and
+# every annotation in this package silently becomes `Any` at the import site.
+# Found by extending the type check to `tests/`, which import it the way an
+# adopter would.
+artifacts = ["src/harness/py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# So `tools/` is importable from tests. The interface scanner is driven via
+# subprocess because its contract IS the command line; the held-out scan has
+# functions worth calling directly, and a per-file sys.path hack in one test
+# module would be the kind of thing that gets copied into the next one.
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ARG", "RUF"]
+
+[tool.mypy]
+# --strict, spelled out, with no per-module escape hatches. "type-check
+# passes" is an acceptance criterion, and `ignore_errors` anywhere would make
+# it one that passes by construction.
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+disallow_any_unimported = true
+files = ["src", "tools", "tests"]
+# `tools/` is a package to the tests (which import `tools.check_holdout_absence`)
+# and a directory of scripts to the shell. Without this, mypy sees
+# `verify_phase1` and `tools.verify_phase1` as two modules for one file and
+# stops. The tests are included deliberately: most of what this project asserts
+# lives in them, and a type check that skipped them would be reporting on the
+# smaller half.
+explicit_package_bases = true
+mypy_path = "src"

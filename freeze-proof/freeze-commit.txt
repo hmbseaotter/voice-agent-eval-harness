@@ -1,0 +1,26 @@
+tree 11319cedc6fdf66dc9f53dac12453ffb876861e9
+parent dfd3710440c1051043f7e969c68ee9ee8802551b
+author Saso Gale <hmbseaotter@gmail.com> 1789339230 -0700
+committer Saso Gale <hmbseaotter@gmail.com> 1789339230 -0700
+
+Carry P4-30 as OB-36, and record it in the phase-4 audit's banner
+
+The phase-4 audit's fourth re-verification found one thing (P4-30): the
+informed retry names the first failure the engine finds, so an answer
+with two faults is corrected for one and refused for the other. The
+remediation reproduced it on both shapes, a rejected citation with an
+empty rests_on and both lists empty, with a retry fixing both resolving
+applicable. It changes no recorded result, and the audit found nothing
+that must close before the tag.
+
+On the owner's decision it is carried rather than fixed: item 13 in the
+phase-4 audit handover, whose opening now names it among what is owed
+there, and OB-36 in OBLIGATIONS.md, triggered by the tag like OB-30 to
+OB-35, with the register's tagged row count at 36. The banner records
+the carry, and that section 11's note on the template's rests_on
+sentences stays with D165, also on the owner's decision.
+
+The full suite passes, 1,162 tests, including the obligations harvest
+and the tagged row count; the four phase verifiers pass their 21, 24,
+23 and 24 checks; the statement inventory resolves; and all three
+files are LF.

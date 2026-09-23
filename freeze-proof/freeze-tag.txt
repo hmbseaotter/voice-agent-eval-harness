@@ -1,0 +1,6 @@
+object 6d3a7101aaa1f15b440de43fe5142434f69c9dc9
+type commit
+tag rubric-frozen-v1
+tagger Saso Gale <hmbseaotter@gmail.com> 1789340091 -0700
+
+Freeze the rubric at the end of phase 4

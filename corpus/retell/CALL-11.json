@@ -1,0 +1,521 @@
+{
+  "call_type": "phone_call",
+  "call_id": "CALL-11",
+  "agent_id": "verso-support",
+  "agent_version": 1,
+  "call_status": "ended",
+  "direction": "inbound",
+  "from_number": "+14155550107",
+  "to_number": "+14155550100",
+  "start_timestamp": 1805966077000,
+  "end_timestamp": 1805966197596,
+  "duration_ms": 120596,
+  "disconnection_reason": "user_hangup",
+  "retell_llm_dynamic_variables": {
+    "caller_ani": "+1 (415) 555-0107",
+    "matched_account_id": "AC-33470",
+    "matched_by": "caller_ani",
+    "account_holder_name": "J. Ferreira",
+    "account_zip": "00358",
+    "account_email": "j.ferreira@example.com",
+    "identity_verified": "false",
+    "booking_reference": "BK-4408-ZR",
+    "event_title": "Understory at The Alder Room",
+    "event_id": "EV-60218",
+    "ticket_count": "1",
+    "ticket_price_total": "22.00",
+    "currency": "USD",
+    "booking_fee": "2.50",
+    "door_time": "2027-05-09T14:30:00Z",
+    "disclosure_refund_timing": "Refunds are issued to the original payment method and reach your statement within five business days. The booking fee is not refundable."
+  },
+  "collected_dynamic_variables": {
+    "identity_verified": "true"
+  },
+  "transcript_with_tool_calls": [
+    {
+      "role": "agent",
+      "content": "Verso Tickets, this is Kit. How can I help?",
+      "words": [
+        {
+          "word": "Verso",
+          "start": 6.888,
+          "end": 7.314
+        },
+        {
+          "word": "Tickets,",
+          "start": 7.314,
+          "end": 7.74
+        },
+        {
+          "word": "this",
+          "start": 7.74,
+          "end": 8.166
+        },
+        {
+          "word": "is",
+          "start": 8.166,
+          "end": 8.592
+        },
+        {
+          "word": "Kit.",
+          "start": 8.592,
+          "end": 9.019
+        },
+        {
+          "word": "How",
+          "start": 9.019,
+          "end": 9.445
+        },
+        {
+          "word": "can",
+          "start": 9.445,
+          "end": 9.871
+        },
+        {
+          "word": "I",
+          "start": 9.871,
+          "end": 10.297
+        },
+        {
+          "word": "help?",
+          "start": 10.297,
+          "end": 10.723
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "Hello — I need to cancel a booking for the Understory matinee, please.",
+      "words": [
+        {
+          "word": "Hello",
+          "start": 11.483,
+          "end": 11.934
+        },
+        {
+          "word": "—",
+          "start": 11.934,
+          "end": 12.385
+        },
+        {
+          "word": "I",
+          "start": 12.385,
+          "end": 12.836
+        },
+        {
+          "word": "need",
+          "start": 12.836,
+          "end": 13.287
+        },
+        {
+          "word": "to",
+          "start": 13.287,
+          "end": 13.738
+        },
+        {
+          "word": "cancel",
+          "start": 13.738,
+          "end": 14.189
+        },
+        {
+          "word": "a",
+          "start": 14.189,
+          "end": 14.64
+        },
+        {
+          "word": "booking",
+          "start": 14.64,
+          "end": 15.091
+        },
+        {
+          "word": "for",
+          "start": 15.091,
+          "end": 15.542
+        },
+        {
+          "word": "the",
+          "start": 15.542,
+          "end": 15.993
+        },
+        {
+          "word": "Understory",
+          "start": 15.993,
+          "end": 16.444
+        },
+        {
+          "word": "matinee,",
+          "start": 16.444,
+          "end": 16.895
+        },
+        {
+          "word": "please.",
+          "start": 16.895,
+          "end": 17.346
+        }
+      ]
+    },
+    {
+      "role": "agent",
+      "content": "I can do that. Can I get the ZIP code on the account?",
+      "words": [
+        {
+          "word": "I",
+          "start": 18.166,
+          "end": 18.551
+        },
+        {
+          "word": "can",
+          "start": 18.551,
+          "end": 18.936
+        },
+        {
+          "word": "do",
+          "start": 18.936,
+          "end": 19.32
+        },
+        {
+          "word": "that.",
+          "start": 19.32,
+          "end": 19.705
+        },
+        {
+          "word": "Can",
+          "start": 19.705,
+          "end": 20.09
+        },
+        {
+          "word": "I",
+          "start": 20.09,
+          "end": 20.475
+        },
+        {
+          "word": "get",
+          "start": 20.475,
+          "end": 20.859
+        },
+        {
+          "word": "the",
+          "start": 20.859,
+          "end": 21.244
+        },
+        {
+          "word": "ZIP",
+          "start": 21.244,
+          "end": 21.629
+        },
+        {
+          "word": "code",
+          "start": 21.629,
+          "end": 22.014
+        },
+        {
+          "word": "on",
+          "start": 22.014,
+          "end": 22.398
+        },
+        {
+          "word": "the",
+          "start": 22.398,
+          "end": 22.783
+        },
+        {
+          "word": "account?",
+          "start": 22.783,
+          "end": 23.168
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "00358.",
+      "words": [
+        {
+          "word": "00358.",
+          "start": 23.828,
+          "end": 24.528
+        }
+      ]
+    },
+    {
+      "role": "tool_call_invocation",
+      "tool_call_id": "t1",
+      "name": "verify_caller",
+      "arguments": "{\"account\": \"AC-33470\", \"zip\": \"00358\"}"
+    },
+    {
+      "role": "tool_call_result",
+      "tool_call_id": "t1",
+      "content": "{\"status\": \"ok\", \"detail\": \"match=true\"}",
+      "successful": true
+    },
+    {
+      "role": "tool_call_invocation",
+      "tool_call_id": "t2",
+      "name": "fetch_policy",
+      "arguments": "{\"document\": \"refund.v1\"}"
+    },
+    {
+      "role": "tool_call_result",
+      "tool_call_id": "t2",
+      "content": "{\"status\": \"found\", \"detail\": \"refund.v1 returned; 14 clauses\"}",
+      "successful": true
+    },
+    {
+      "role": "tool_call_invocation",
+      "tool_call_id": "t3",
+      "name": "issue_refund",
+      "arguments": "{\"booking\": \"BK-4408-ZR\", \"amount\": \"22.00\"}"
+    },
+    {
+      "role": "tool_call_result",
+      "tool_call_id": "t3",
+      "content": "{\"status\": \"ok\", \"detail\": \"refund_id=RF-20988; settlement=cardinal_pay; expected_days=5\"}",
+      "successful": true
+    },
+    {
+      "role": "agent",
+      "content": "That's canceled for you, and the twenty-two dollars will come back to your card.",
+      "words": [
+        {
+          "word": "That's",
+          "start": 37.583,
+          "end": 38.026
+        },
+        {
+          "word": "canceled",
+          "start": 38.026,
+          "end": 38.468
+        },
+        {
+          "word": "for",
+          "start": 38.468,
+          "end": 38.911
+        },
+        {
+          "word": "you,",
+          "start": 38.911,
+          "end": 39.354
+        },
+        {
+          "word": "and",
+          "start": 39.354,
+          "end": 39.797
+        },
+        {
+          "word": "the",
+          "start": 39.797,
+          "end": 40.239
+        },
+        {
+          "word": "twenty-two",
+          "start": 40.239,
+          "end": 40.682
+        },
+        {
+          "word": "dollars",
+          "start": 40.682,
+          "end": 41.125
+        },
+        {
+          "word": "will",
+          "start": 41.125,
+          "end": 41.567
+        },
+        {
+          "word": "come",
+          "start": 41.567,
+          "end": 42.01
+        },
+        {
+          "word": "back",
+          "start": 42.01,
+          "end": 42.453
+        },
+        {
+          "word": "to",
+          "start": 42.453,
+          "end": 42.896
+        },
+        {
+          "word": "your",
+          "start": 42.896,
+          "end": 43.338
+        },
+        {
+          "word": "card.",
+          "start": 43.338,
+          "end": 43.781
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "And I'll get something in writing?",
+      "words": [
+        {
+          "word": "And",
+          "start": 44.621,
+          "end": 45.01
+        },
+        {
+          "word": "I'll",
+          "start": 45.01,
+          "end": 45.399
+        },
+        {
+          "word": "get",
+          "start": 45.399,
+          "end": 45.788
+        },
+        {
+          "word": "something",
+          "start": 45.788,
+          "end": 46.176
+        },
+        {
+          "word": "in",
+          "start": 46.176,
+          "end": 46.565
+        },
+        {
+          "word": "writing?",
+          "start": 46.565,
+          "end": 46.954
+        }
+      ]
+    },
+    {
+      "role": "agent",
+      "content": "I'll send confirmation to the email address we have on file for you.",
+      "words": [
+        {
+          "word": "I'll",
+          "start": 47.774,
+          "end": 48.217
+        },
+        {
+          "word": "send",
+          "start": 48.217,
+          "end": 48.659
+        },
+        {
+          "word": "confirmation",
+          "start": 48.659,
+          "end": 49.102
+        },
+        {
+          "word": "to",
+          "start": 49.102,
+          "end": 49.545
+        },
+        {
+          "word": "the",
+          "start": 49.545,
+          "end": 49.987
+        },
+        {
+          "word": "email",
+          "start": 49.987,
+          "end": 50.43
+        },
+        {
+          "word": "address",
+          "start": 50.43,
+          "end": 50.873
+        },
+        {
+          "word": "we",
+          "start": 50.873,
+          "end": 51.316
+        },
+        {
+          "word": "have",
+          "start": 51.316,
+          "end": 51.758
+        },
+        {
+          "word": "on",
+          "start": 51.758,
+          "end": 52.201
+        },
+        {
+          "word": "file",
+          "start": 52.201,
+          "end": 52.644
+        },
+        {
+          "word": "for",
+          "start": 52.644,
+          "end": 53.086
+        },
+        {
+          "word": "you.",
+          "start": 53.086,
+          "end": 53.529
+        }
+      ]
+    },
+    {
+      "role": "tool_call_invocation",
+      "tool_call_id": "t4",
+      "name": "send_confirmation",
+      "arguments": "{\"booking\": \"BK-4408-ZR\", \"to\": \"j.ferreira@example.com\"}"
+    },
+    {
+      "role": "tool_call_result",
+      "tool_call_id": "t4",
+      "content": "{\"status\": \"ok\", \"detail\": \"message_id=MS-55210\"}",
+      "successful": true
+    },
+    {
+      "role": "user",
+      "content": "Perfect, thank you.",
+      "words": [
+        {
+          "word": "Perfect,",
+          "start": 58.389,
+          "end": 58.815
+        },
+        {
+          "word": "thank",
+          "start": 58.815,
+          "end": 59.241
+        },
+        {
+          "word": "you.",
+          "start": 59.241,
+          "end": 59.667
+        }
+      ]
+    },
+    {
+      "role": "agent",
+      "content": "You're very welcome.",
+      "words": [
+        {
+          "word": "You're",
+          "start": 60.397,
+          "end": 60.79
+        },
+        {
+          "word": "very",
+          "start": 60.79,
+          "end": 61.183
+        },
+        {
+          "word": "welcome.",
+          "start": 61.183,
+          "end": 61.576
+        }
+      ]
+    }
+  ],
+  "call_analysis": {
+    "call_successful": true,
+    "custom_analysis_data": {
+      "outcome": "resolved",
+      "outcome_reason": "refund_issued"
+    }
+  }
+}

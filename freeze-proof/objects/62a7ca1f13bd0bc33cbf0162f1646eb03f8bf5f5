@@ -1,0 +1,124 @@
+"""Run the extraction tier: transcripts in, frozen artifact out.
+
+    uv run python -m harness.extract
+
+Deliberately a module entry point rather than a CLI. The real CLI arrives at P2
+with `harness run --tier assert` and a tier selector; building an argparse
+surface now would mean tearing one out then. What phase 1 needs is for the
+phase to end with something that *executes*, because a grammar only looks
+complete until a parser reads it -- and that is what this is.
+
+Exit codes:
+
+    0  every transcript parsed, artifact written
+    1  at least one unparsed line -- the count is reported, and the run fails
+    2  a file-level defect or an unknown tool status -- aborted, named
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from harness.core.artifact import build_payload, write_artifact
+from harness.core.events import Call, TranscriptError
+from harness.corpus.text_adapter import parse_call
+
+_DEFAULT_TRANSCRIPTS: str = "corpus/transcripts"
+_DEFAULT_OUT: str = "build/extraction-artifact.json"
+_DEFAULT_CORPUS_VERSION_FILE: str = "corpus/CORPUS_VERSION"
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def extract(transcripts_dir: Path) -> tuple[Call, ...]:
+    """Parse every transcript in the directory, in sorted order.
+
+    Took `corpus_version` and `repo_root` and used neither; four call sites
+    passed all three. Ruff did not catch it because `ARG` was not in
+    `[tool.ruff.lint] select`, and pyflakes flags unused locals and imports
+    rather than parameters. Both are fixed -- the rule catches the class.
+
+    Sorted, because the artifact's hash must not depend on filesystem
+    enumeration order -- that would make the same corpus hash differently on
+    two machines and quietly break every "recompute and check" claim built on
+    top of it.
+    """
+    paths = sorted(transcripts_dir.glob("*.txt"))
+    if not paths:
+        raise FileNotFoundError(f"no transcripts found in {transcripts_dir}")
+    return tuple(parse_call(path) for path in paths)
+
+
+def _display(path: Path, root: Path) -> str:
+    """Repo-relative when it can be, absolute otherwise.
+
+    `Path.relative_to` raises for a path outside the root, so a success message
+    that assumed repo-relative crashed whenever the output was written
+    elsewhere -- which is exactly what a test writing to a temp directory does.
+    A progress line should never be able to fail the run it is reporting on.
+    """
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="harness.extract", description=__doc__)
+    parser.add_argument("--transcripts", default=_DEFAULT_TRANSCRIPTS)
+    parser.add_argument("--out", default=_DEFAULT_OUT)
+    parser.add_argument("--corpus-version-file", default=_DEFAULT_CORPUS_VERSION_FILE)
+    args = parser.parse_args(argv)
+
+    root = _repo_root()
+    transcripts_dir = Path(args.transcripts)
+    if not transcripts_dir.is_absolute():
+        transcripts_dir = root / transcripts_dir
+    version_file = Path(args.corpus_version_file)
+    if not version_file.is_absolute():
+        version_file = root / version_file
+    out_path = Path(args.out)
+    if not out_path.is_absolute():
+        out_path = root / out_path
+
+    corpus_version = version_file.read_text(encoding="utf-8").strip()
+
+    try:
+        calls = extract(transcripts_dir)
+    except TranscriptError as exc:
+        print(f"extraction aborted: {exc}", file=sys.stderr)
+        return 2
+
+    unparsed_total = sum(len(call.unparsed) for call in calls)
+    for call in calls:
+        for line in call.unparsed:
+            print(
+                f"{call.source_path}:{line.line_number}: unparsed -- {line.reason}",
+                file=sys.stderr,
+            )
+
+    payload = build_payload(calls, corpus_version, root)
+    digest = write_artifact(out_path, payload)
+
+    events = sum(len(call.events) for call in calls)
+    print(f"calls: {len(calls)}  events: {events}  unparsed lines: {unparsed_total}")
+    print(f"artifact: {_display(out_path, root)}")
+    print(f"content hash: {digest}")
+
+    if unparsed_total:
+        # Reported, not discarded, and the run fails. W18 was the absence of
+        # this counter entirely; W19 was a conformance test that crashed
+        # instead of reporting the violation it had already recorded. The
+        # artifact is still written, so the recorded violations are inspectable
+        # rather than lost with the process.
+        print(f"FAILED: {unparsed_total} unparsed line(s)", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

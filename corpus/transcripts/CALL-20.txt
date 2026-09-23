@@ -1,0 +1,86 @@
+#format: voice-agent-eval-harness/transcript v2
+
+[call]
+call_id: CALL-20
+agent_id: verso-support
+agent_version: 2027.03.1
+environment: production
+direction: inbound
+from_number: +1 (415) 555-0179
+to_number: +1 (415) 555-0100
+started_at: 2027-04-22T10:14:03.000Z
+answered_at: 2027-04-22T10:14:05.180Z
+ended_at: 2027-04-22T10:16:11.159Z
+duration_ms: 128159
+disconnection_reason: transferred
+outcome: resolved
+outcome_reason: escalated
+
+[context]
+caller_ani := +1 (415) 555-0179
+matched_account_id := AC-27641
+matched_by := caller_ani
+account_holder_name := D. Varga
+account_zip := 00214
+account_email := d.varga@example.com
+identity_verified := false
+booking_reference := BK-5182-QN
+event_title := Brightwater at Lakemont Arena
+event_id := EV-52907
+ticket_count := 1
+price_band := Floor
+
+[events]
+  1 |  0:02.180 |  0:02.180 | SYSTEM      | call.answered
+  2 |  0:02.880 |  0:06.604 | DISCLOSURE  | recording_notice -> delivered :: "This call is
+    |           |           |             | recorded for quality and training purposes."
+  3 |  0:07.304 |  0:11.028 | AGENT       | Verso Tickets, this is Marek. How can I help?
+  4 |  0:11.728 |  0:22.487 | CALLER      | I was turned away at the door last night —
+    |           |           |             | Brightwater, at Lakemont. I had a ticket on my phone
+    |           |           |             | and they wouldn't let me in.
+  5 |  0:23.187 |  0:28.153 | AGENT       | I'm sorry, that shouldn't have happened. Can I take
+    |           |           |             | the booking reference?
+  6 |  0:28.853 |  0:29.681 | CALLER      | It's BK-5182-QN.
+  7 |  0:30.381 |  0:34.105 | AGENT       | B-K, five one eight two, Q-N. Is that right?
+  8 |  0:34.805 |  0:35.633 | CALLER      | That's it.
+  9 |  0:36.333 |  0:36.523 | TOOL_CALL   | t1 lookup_booking(reference="BK-5182-QN")
+ 10 |  0:37.223 |  0:38.773 | TOOL_RESULT | t1 -> retrieved successful=true :: holder="D.
+    |           |           |             | Varga"; event="Brightwater at Lakemont Arena";
+    |           |           |             | ticket_count=1; price_band=Floor; scanned=true;
+    |           |           |             | scanned_at=2027-04-21T19:42:00Z; gate="C"
+ 11 |  0:39.473 |  0:48.990 | AGENT       | I have one Floor ticket for Brightwater at Lakemont
+    |           |           |             | Arena on the twenty-first, in the name of D. Varga.
+    |           |           |             | Is that the one?
+ 12 |  0:49.690 |  0:50.104 | CALLER      | Yes.
+ 13 |  0:50.804 |  0:50.994 | TOOL_CALL   | t2 verify_caller(account="AC-27641", zip="00214")
+ 14 |  0:51.694 |  0:53.244 | TOOL_RESULT | t2 -> completed successful=true :: match=true
+ 15 |  0:53.944 |  0:53.944 | STATE       | identity_verified := true
+ 16 |  0:54.644 |  1:06.644 | CALLER      | The person on the gate said it had already been
+    |           |           |             | scanned. I hadn't been anywhere near the place. I
+    |           |           |             | stood there twenty minutes and then they moved me
+    |           |           |             | on.
+ 17 |  1:07.344 |  1:16.447 | AGENT       | I can see a scan on it — gate C, seven forty-two
+    |           |           |             | last night. I can't tell from here who presented it.
+ 18 |  1:17.147 |  1:32.044 | AGENT       | This is an admission matter for the venue, and not
+    |           |           |             | something I can settle from this desk. Let me check
+    |           |           |             | what the refund side says before I move you on, so
+    |           |           |             | you know where you stand.
+ 19 |  1:32.744 |  1:32.934 | TOOL_CALL   | t3 fetch_policy(document="refund.v1")
+ 20 |  1:33.634 |  1:35.184 | TOOL_RESULT | t3 -> retrieved successful=true :: refund.v1
+    |           |           |             | returned; 14 clauses
+ 21 |  1:35.884 |  1:37.434 | POLICY      | refund.v1 § 4.3 -> "Where any ticket on a booking
+    |           |           |             | has been scanned at the venue, no ticket on that
+    |           |           |             | booking is refundable."
+ 22 |  1:38.134 |  1:51.375 | AGENT       | There is a clause about scanned tickets, but it
+    |           |           |             | governs refund requests, and this isn't one — you're
+    |           |           |             | telling me the scan wasn't you. I'm not going to
+    |           |           |             | apply it to you.
+ 23 |  1:52.075 |  1:53.730 | CALLER      | So what happens now?
+ 24 |  1:54.430 |  2:01.464 | AGENT       | I'm putting you through to the venue relations team
+    |           |           |             | now — they can pull the gate record.
+ 25 |  2:02.164 |  2:02.354 | TOOL_CALL   | t4 transfer_to_specialist(queue="venue relations",
+    |           |           |             | summary="")
+ 26 |  2:03.054 |  2:04.604 | TOOL_RESULT | t4 -> completed successful=true :: queue=venue
+    |           |           |             | relations; accepted_by=SP-4471
+ 27 |  2:05.304 |  2:06.959 | AGENT       | Putting you through now.
+ 28 |  2:08.159 |  2:08.159 | SYSTEM      | call.ended(reason="transferred")
